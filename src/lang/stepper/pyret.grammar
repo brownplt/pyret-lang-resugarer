@@ -1,0 +1,199 @@
+core
+  values
+
+	S : String -> S;
+	Expr : Expr -> Stmt;
+
+	List : S * [Expr] -> Expr;
+	Id : S * String -> Expr;
+	Num : S * String -> Expr;
+	True : S -> Expr;
+	False : S -> Expr;
+	Str : S * String -> Expr;
+
+	Lam : S * [String] * [Bind] * Ann * String * Block * Block -> Expr;
+	Method : S * [Bind] * Ann * String * Block * Block -> Expr;
+
+	Obj : S * [Member] -> Expr;
+
+	Bind : S * String * Ann -> Bind;
+
+	# Annotations #
+
+	ABlank : S -> Ann;
+	AAny : S -> Ann;
+	AName : S * String -> Ann;
+	AArrow : S * [Ann] * Ann -> Ann;
+	AMethod : S * [Ann] * Ann -> Ann;
+	ARecord : S * [AField] -> Ann;
+	AField : S * String * Ann -> AField;
+	APred : S * Ann * Expr -> Ann;
+	AApp : S * String * [Ann] -> Ann;
+	ADotApp : S * ADot * [Ann] -> Ann;
+	ADot : S * String * String -> ADot;
+
+
+  constructors
+
+    Prog : S * [Header] * Block -> Prog;
+
+
+    # Headers #
+
+    ImportString : S * String * String -> Header;
+	ImportSymbol : S * String * String -> Header;
+	Provide : S * Expr -> Header;
+	ProvideAll : S -> Header;
+
+
+    # Statements #
+
+	Block : S * [Stmt] -> Block;
+
+	Fun : S * String * [String] * [Bind] * Ann * String * Block * Block -> Stmt;
+	Var : S * Bind * Expr -> Stmt;
+	Let : S * Bind * Expr -> Stmt;
+	When : S * [Expr] * Block -> Stmt;
+	Try : S * Expr * Bind * Expr -> Stmt;
+	
+	IfElse : S * [IfBranch] * Block -> Stmt;
+	IfBranch : S * Expr * Block -> IfBranch;
+	
+	Cases : S * Expr * Expr * [CasesBranch] -> Stmt;
+	CasesElse : S * Expr * Expr * [CasesBranch] * Block -> Stmt;
+	CasesBranch : S * String * [Bind] * Block -> CasesBranch;
+
+	Data : S * String * [String] * [Variant] * [Member] * Block -> Stmt;
+	Variant : S * String * [Bind] * [Member] -> Variant;
+	SingletonVariant : S * String * [Member] -> Variant;
+
+	DataField : S * Expr * Expr -> Member;
+	MethodField : S * Expr * [Bind] * Ann * String * Block * Block -> Member;
+
+
+    # Expressions #
+
+    Op : S * String * Expr * Expr -> Expr;
+	Not : S * Expr -> Expr;
+	Paren : S * Expr -> Expr;
+	
+	App : S * Expr * [Expr] -> Expr;
+	LeftApp : S * Expr * Expr * [Expr] -> Expr;
+	Assign : S * String * Expr -> Expr;
+	
+	Dot : S * Expr * String -> Expr;
+	Bracket : S * Expr * Expr -> Expr;
+
+	Colon : S * Expr * Symbol -> Expr;
+	ColonBracket : S * Expr * Expr -> Expr;
+
+	For : S * Expr * [ForBind] * Ann * Block -> Expr;
+	ForBind : S * Bind * Expr -> ForBind;
+
+	Extend : S * Expr * [Member] -> Expr;
+
+
+
+
+surface
+
+  values
+
+    S : String -> S;
+	Expr : Expr -> Stmt;
+
+	List : S * [Expr] -> Expr;
+	Id : S * String -> Expr;
+	Num : S * String -> Expr;
+	True : S -> Expr;
+	False : S -> Expr;
+	Str : S * String -> Expr;
+
+	Lam : S * [String] * [Bind] * Ann * String * Block * Block -> Expr;
+	Method : S * [Bind] * Ann * String * Block * Block -> Expr;
+
+	Obj : S * [Member] -> Expr;
+
+	Bind : S * String * Ann -> Bind;
+
+	# Annotations #
+
+	ABlank : S -> Ann;
+	AAny : S -> Ann;
+	AName : S * String -> Ann;
+	AArrow : S * [Ann] * Ann -> Ann;
+	AMethod : S * [Ann] * Ann -> Ann;
+	ARecord : S * [AField] -> Ann;
+	AField : S * String * Ann -> AField;
+	APred : S * Ann * Expr -> Ann;
+	AApp : S * String * [Ann] -> Ann;
+	ADotApp : S * ADot * [Ann] -> Ann;
+	ADot : S * String * String -> ADot;
+
+
+  constructors
+
+    Prog : S * [Header] * Block -> Prog;
+
+
+    # Headers #
+
+    ImportString : S * String * String -> Header;
+	ImportSymbol : S * String * String -> Header;
+	Provide : S * Expr -> Header;
+	ProvideAll : S -> Header;
+
+
+    # Statements #
+
+	Block : S * [Stmt] -> Block;
+
+	Fun : S * String * [String] * [Bind] * Ann * String * Block * Block -> Stmt;
+	Var : S * Bind * Expr -> Stmt;
+	Let : S * Bind * Expr -> Stmt;
+	When : S * [Expr] * Block -> Stmt;
+	Try : S * Expr * Bind * Expr -> Stmt;
+	
+	If : S * [IfBranch] -> Stmt;
+	IfElse : S * [IfBranch] * Block -> Stmt;
+	IfBranch : S * Expr * Block -> IfBranch;
+	
+	Cases : S * Expr * Expr * [CasesBranch] -> Stmt;
+	CasesElse : S * Expr * Expr * [CasesBranch] * Block -> Stmt;
+	CasesBranch : S * String * [Bind] * Block -> CasesBranch;
+
+	Data : S * String * [String] * [Variant] * [Member] * Block -> Stmt;
+	Variant : S * String * [Bind] * [Member] -> Variant;
+	SingletonVariant : S * String * [Member] -> Variant;
+
+	DataField : S * Expr * Expr -> Member;
+	MethodField : S * Expr * [Bind] * Ann * String * Block * Block -> Member;
+
+
+    # Expressions #
+
+    Op : S * String * Expr * Expr -> Expr;
+	Not : S * Expr -> Expr;
+	Paren : S * Expr -> Expr;
+	
+	App : S * Expr * [Expr] -> Expr;
+	LeftApp : S * Expr * Expr * [Expr] -> Expr;
+	Assign : S * String * Expr -> Expr;
+	
+	Dot : S * Expr * String -> Expr;
+	Bracket : S * Expr * Expr -> Expr;
+
+	Colon : S * Expr * Symbol -> Expr;
+	ColonBracket : S * Expr * Expr -> Expr;
+
+	For : S * Expr * [ForBind] * Ann * Block -> Expr;
+	ForBind : S * Bind * Expr -> ForBind;
+
+	Extend : S * Expr * [Member] -> Expr;
+
+
+rules
+
+  If(s, branches) ->
+    IfElse(s, branches, Block(s, [Expr(App(s, Id(s, "raise"),
+	                                  [Str(s, "if: no tests matchd")]))]));

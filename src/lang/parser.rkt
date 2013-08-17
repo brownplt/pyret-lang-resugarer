@@ -8,11 +8,13 @@
 
 ;; borrowed from dyoo's brainfudge
 (define (loc stx)
+  (info
     (srcloc (syntax-source stx)
             (syntax-line stx)
             (syntax-column stx)
             (syntax-position stx)
-            (syntax-span stx)))
+            (syntax-span stx))
+    (list)))
 
 (define (parse-name n) (string->symbol (syntax->datum n)))
 

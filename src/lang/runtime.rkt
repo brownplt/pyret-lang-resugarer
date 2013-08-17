@@ -3,6 +3,8 @@
 ;(require racket/set ;; set add union member intersect map)
 (require (for-syntax racket/base))
 (require "string-map.rkt")
+; !!!
+;(require "stepper/runtime.rkt")
 
 (define (hash-fold f h init)
   (when (not (hash? h)) (error (format "Bad fold: ~a ~a ~a" f h init)))
@@ -56,6 +58,9 @@
        (string-join (rest strs) sep)))]))
 
 (provide
+  ; !!!
+  ;(prefix-out s:
+  ;  (all-from-out "stepper-runtime.rkt"))
   (prefix-out p:
     (combine-out
       make-string-map
@@ -844,4 +849,3 @@ And the object was:
 (mk-pred Object p-object?)
 (mk-pred Function p-fun?)
 (mk-pred Method p-method?)
-

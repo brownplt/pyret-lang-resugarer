@@ -118,5 +118,5 @@
   (match ast
     [(s-prog l imports block)
      (s-prog l imports (wrap l (get-and-replace-constants block)))]
-    [_ (wrap (srcloc 'pyret-compile #f #f #f #f) (get-and-replace-constants ast))]))
+    [_ (wrap (empty-info 'pyret-compile) (get-and-replace-constants ast))]))
 

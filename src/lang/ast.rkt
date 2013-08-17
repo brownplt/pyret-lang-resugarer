@@ -1,6 +1,10 @@
-#lang racket/base
+#lang racket
 
-(provide (all-defined-out))
+; !!! TODO(Justin): temp check on s-block
+;                   racket -> racket/base!
+
+(provide (except-out (all-defined-out) (struct-out s-block))
+         (contract-out (struct s-block ((syntax info?) (stmts any/c)))))
 (require racket/match racket/path racket/bool racket/list)
 
 #|
@@ -14,6 +18,12 @@ these metadata purposes.
 
 |#
 
+; Each term is tagged with src location info,
+; and (just for the stepper) resugaring tags
+(define-struct info (loc tags) #:transparent)
+(define (empty-info phantom-filename)
+  (info (srcloc phantom-filename #f #f #f #f) (list)))
+
 (define (src->module-name e)
   (cond
     [(symbol? e) e]
@@ -26,12 +36,12 @@ these metadata purposes.
 ;; s-prog : srcloc (Listof Header) s-block -> s-prog
 (struct s-prog (syntax imports block) #:transparent)
 
-;; A Header is a (U s-import s-provide)
-;; s-import : srcloc (U String Symbol) Symbol -> srcloc
+;; A Header is a (U s-import s-provide s-provide-all)
+;; s-import : srcloc (U String Symbol) Symbol -> s-import
 (struct s-import (syntax file name) #:transparent)
-;; s-provide : srcloc expr -> srcloc
+;; s-provide : srcloc expr -> s-provide
 (struct s-provide (syntax expr) #:transparent)
-;; s-provide-all : srcloc -> srcloc
+;; s-provide-all : srcloc -> s-provide-all
 (struct s-provide-all (syntax) #:transparent)
 
 
@@ -54,7 +64,7 @@ these metadata purposes.
 ;; s-bind : srcloc Symbol Ann -> s-bind
 (struct s-bind (syntax id ann) #:transparent)
 
-;; A Stmt is a (U s-fun s-var s-if s-try s-data s-import Expr)
+;; A Stmt is a (U s-fun s-var s-let s-if s-try s-data s-import Expr)
 
 ;; s-fun : srcloc Symbol (Listof Symbol) (Listof s-bind) Ann String s-block s-block
 (struct s-fun (syntax name params args ann doc body check) #:transparent)
@@ -63,7 +73,7 @@ these metadata purposes.
 (struct s-var (syntax name value) #:transparent)
 ;; s-let : srcloc bind Expr -> s-let
 (struct s-let (syntax name value) #:transparent)
-;; s-when : srcloc (Listof Expr s-block) -> s-when
+;; s-when : srcloc (Listof Expr) s-block -> s-when
 (struct s-when (syntax test block) #:transparent)
 ;; s-if : srcloc (Listof s-if-branch) -> s-if
 (struct s-if (syntax branches) #:transparent)
@@ -76,7 +86,7 @@ these metadata purposes.
 
 ;; s-cases : srcloc Expr Expr (Listof s-cases-branch) -> s-cases
 (struct s-cases (syntax type val branches) #:transparent)
-;; s-cases-else : srcloc (Listof s-cases-branch) s-block -> s-cases-else
+;; s-cases-else : srcloc Expr Expr (Listof s-cases-branch) s-block -> s-cases-else
 (struct s-cases-else (syntax type val branches else) #:transparent)
 ;; s-cases-branch : srcloc symbol (ListOf s-bind) s-block -> s-cases-branch
 (struct s-cases-branch (syntax name args body) #:transparent)
@@ -133,6 +143,13 @@ these metadata purposes.
 ;;    s-colon s-colon-bracket s-lam
 ;;    s-block s-method))
 
+(define (s-expr? x)
+  (let [[expr-types (list
+     s-op? s-not? s-app? s-left-app? s-assign? s-dot?
+     s-bracket? s-colon? s-colon-bracket? s-for? s-for-bind? s-extend?
+     s-list? s-id? s-num? s-bool? s-str?)]]
+    (ormap (λ (pred) (pred x)) expr-types)))
+
 ;; s-lam : srcloc (Listof Symbol) (Listof s-bind) Ann String s-block s-block -> s-lam
 (struct s-lam (syntax typarams args ann doc body check) #:transparent)
 
@@ -187,7 +204,7 @@ these metadata purposes.
 
 ;; s-variant : srcloc Symbol (Listof s-bind) (Listof Member)
 (struct s-variant (syntax name binds with-members) #:transparent)
-;; s-variant : srcloc Symbol (Listof Member)
+;; s-singleton-variant : srcloc Symbol (Listof Member)
 (struct s-singleton-variant (syntax name with-members) #:transparent)
 
 ;; s-for-bind : srcloc s-bind Expr
@@ -209,7 +226,7 @@ these metadata purposes.
 (struct a-field a-ann (syntax name ann) #:transparent)
 ;; a-record : srcloc (Listof a-field)
 (struct a-record a-ann (syntax fields) #:transparent)
-;; a-app : srcloc (Symbol or a-dot) (Listof a-ann)
+;; a-app : srcloc (U Symbol a-dot) (Listof a-ann)
 (struct a-app a-ann (syntax ann parameters) #:transparent)
 ;; a-pred : srcloc a-ann Expr
 (struct a-pred a-ann (syntax ann exp) #:transparent)

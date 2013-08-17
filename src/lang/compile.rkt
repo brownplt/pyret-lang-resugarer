@@ -11,8 +11,28 @@
   "runtime.rkt"
   "compile-helpers/find.rkt"
   "compile-helpers/lift-constants.rkt")
+  
+  
+  ;;; Keeping track of the stack ;;;
 
-(define (loc-list loc)
+  (define (compile-stepping-prelude stx)
+    (with-syntax [[code* stx]]
+      #'(r:begin
+         (r:define $val (r:quote gremlin))
+         (r:define ($set-val! v) (r:set! $val v))
+         (r:define $stk (r:list))
+         (r:define ($push! x) (r:set! $stk (r:cons x $stk)))
+         (r:define ($pop!) (r:set! $stk (r:cdr $stk)))
+         (r:define ($reset! [stk (r:list)]) (r:set! $stk stk))
+          code*)))
+
+  
+;;; Compilation ;;;
+  
+(define (loc-list info [n 0])
+  (when (not (info? info))
+    (error (format "boom! ~a" n)))
+  (define loc (info-loc info))
   (define (serialize-source e)
     (cond
       [(symbol? e) (symbol->string e)]
@@ -38,8 +58,8 @@
 
 (define (d->stx stx loc) (datum->syntax #f stx (loc-list loc)))
 
-(define (attach loc stx)
-  (datum->syntax #f (syntax-e stx) (loc-list loc)))
+(define (attach loc n stx)
+  (datum->syntax #f (syntax-e stx) (loc-list loc n)))
 
 (define (block-fun-ids stmts)
   (define (stmt-id stmt)
@@ -122,7 +142,7 @@
 (define (compile-member ast-node env)
   (match ast-node
     [(s-data-field l name value)
-     (attach l
+     (attach l 1
        (with-syntax*
         ([name-stx (compile-string-literal l name env)]
          [val-stx (compile-expr/internal value env)]) 
@@ -140,7 +160,7 @@
   (define (compile-body l body new-env)
     (mark l (compile-expr body new-env)))
   (define (compile-lookup l obj field lookup-type)
-     (attach l
+     (attach l 2
       (with-syntax*
          ([field-stx (compile-string-literal l field env)])
        #`(#,lookup-type #,(loc-stx l) #,(compile-expr obj env) field-stx))))
@@ -149,7 +169,7 @@
     [(s-block l stmts)
      (define new-env (compile-env (compile-env-functions-to-inline env) #f))
      (with-syntax ([(stmt ...) (compile-block l stmts new-env)])
-       (attach l #'(r:let () stmt ...)))]
+       (attach l 383483 #'(r:let () stmt ...)))]
 
     [(s-num l n) #`(p:mk-num #,(d->stx n l))]
     [(s-bool l #t) #`p:p-true]
@@ -158,14 +178,14 @@
 
     [(s-lam l params args ann doc body _)
      (define new-env (compile-env (compile-env-functions-to-inline env) #f))
-     (attach l
+     (attach l 4
        (with-syntax ([(arg ...) (args-stx l args)]
                      [body-stx (compile-body l body new-env)])
          #`(p:pλ (arg ...) #,doc body-stx)))]
     
     [(s-method l args ann doc body _)
      (define new-env (compile-env (compile-env-functions-to-inline env) #f))
-     (attach l
+     (attach l 5
        (with-syntax ([(arg ...) (args-stx l args)]
                      [body-stx (compile-body l body new-env)])
          #`(p:pμ (arg ...) #,doc body-stx)))]
@@ -174,15 +194,15 @@
      (define (compile-if-branch b)
        (match b
          [(s-if-branch s test block)
-          (attach l
+          (attach l 6
                   #`((p:pyret-true? #,(compile-expr test env))
                      #,(compile-expr block env)))]))
-     (attach l
+     (attach l 7
        (with-syntax ([(branch ...) (d->stx (map compile-if-branch c-bs) l)])
          #`(r:cond branch ... [#t #,(compile-expr else-block env)])))]
     
     [(s-try l try (s-bind l2 id ann) catch)
-     (attach l
+     (attach l 8
        #`(r:with-handlers
             ([p:exn:fail:pyret?
               (r:lambda (%exn)
@@ -191,12 +211,12 @@
             #,(compile-expr try env)))]
 
     [(s-id l name)
-     (attach l
+     (attach l 9
        (with-syntax ([name-stx (d->stx (discard-_ name) l)])
          #'name-stx))]
 
     [(s-assign l name expr)
-     (attach l
+     (attach l 10
        (with-syntax ([name-stx (d->stx name l)]
                      [temp (gensym name)])
          #`(r:let [(temp #,(compile-expr expr env))]
@@ -224,18 +244,19 @@
          (with-syntax ([(arg ...) (args-stx l args)])
            #`(p:arity-catcher (arg ...) #,(compile-expr/internal body env)))]
         [_ #`(p:p-base-app #,(compile-expr fun env))]))
-     (attach l
+     (attach l 11
         (with-syntax ([fun (compile-fun-expr fun)]
                       [(arg ...) (map (curryr compile-expr env) args)])
           (mark l #'(fun arg ...))))]
+    ;; !!! insertion point here - r:begin, (s:emit term $stk)
 
     [(s-obj l fields)
-     (attach l
+     (attach l 12
        (with-syntax ([(member ...) (map (curryr compile-member env) fields)])
          #'(p:mk-object (p:make-string-map (r:list member ...)))))]
     
     [(s-extend l super fields)
-     (attach l
+     (attach l 13
        (with-syntax ([(member ...) (map (curryr compile-member env) fields)]
                      [super (compile-expr super env)])
         #`(p:extend #,(loc-stx l)
@@ -255,7 +276,7 @@
 (define (compile-header header)
   (match header
     [(s-import l file name)
-     (attach l
+     (attach l 14
        (with-syntax
         ([file-stx file])
        (with-syntax
@@ -264,7 +285,7 @@
         #`(r:require (r:rename-in req-stx [%PYRET-PROVIDE name-stx])))))]
 
     [(s-provide l exp)
-     (attach l
+     (attach l 15
       (with-syntax [(temp-stx (gensym 'module-provide))]
         #`(r:begin
             (r:define temp-stx #,(compile-expr exp))
@@ -273,10 +294,11 @@
 
 
 (define (compile-prog l headers block)
-  (attach l
+  (attach l 16
    (with-syntax ([(req ...) (map compile-header (filter s-import? headers))]
                  [(prov ...) (map compile-header (filter s-provide? headers))])
-     #`(r:begin req ... #,(compile-pyret block) prov ...))))
+     (compile-stepping-prelude
+      #`(r:begin req ... #,(compile-pyret block) prov ...)))))
 
 (define (compile-pyret ast)
   (match ast
@@ -284,7 +306,7 @@
     [(s-block l stmts)
      (match-define (s-block l2 new-stmts) (lift-constants ast))
      (with-syntax ([(stmt ...) (compile-block l2 new-stmts (compile-env (set) #t))])
-       (attach l #'(r:begin stmt ...)))]
+       (attach l 17 #'(r:begin stmt ...)))]
     [else (error (format "Didn't match a case in compile-pyret: ~a" ast))]))
 
 (define (compile-expr pre-ast)
