@@ -90,6 +90,7 @@
 (error-display-handler process-pyret-error)
 
 (define check-mode #t)
+(define resugar-mode #f)
 (command-line
   #:once-each
   ("--print-racket" path "Print a compiled Racket program on stdout"
@@ -97,6 +98,8 @@
    (pretty-write (syntax->datum (read-syntax path pyret-file))))
   ("--no-checks" "Run without checks"
    (set! check-mode #f))
+  ("--trace" "Show evaluation steps via resugaring"
+   (set! resugar-mode #t))
   #:args file-and-maybe-other-stuff
   (when (> (length file-and-maybe-other-stuff) 0)
     (define pyret-file (simplify-path (path->complete-path (first file-and-maybe-other-stuff))))
@@ -108,7 +111,8 @@
                         [current-load-relative-directory base])
            (define results
             (eval
-              (pyret->racket pyret-file (open-input-file pyret-file) #:check #t)
+              (pyret->racket pyret-file (open-input-file pyret-file)
+                             #:check #t #:resugar resugar-mode)
               (make-fresh-namespace)))
            (print-check-results results))]
         [else

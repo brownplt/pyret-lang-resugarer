@@ -3,8 +3,7 @@
 ;(require racket/set ;; set add union member intersect map)
 (require (for-syntax racket/base))
 (require "string-map.rkt")
-; !!!
-;(require "stepper/runtime.rkt")
+(require "stepper/runtime.rkt")
 
 (define (hash-fold f h init)
   (when (not (hash? h)) (error (format "Bad fold: ~a ~a ~a" f h init)))
@@ -58,9 +57,8 @@
        (string-join (rest strs) sep)))]))
 
 (provide
-  ; !!!
-  ;(prefix-out s:
-  ;  (all-from-out "stepper-runtime.rkt"))
+  (prefix-out s:
+    (all-from-out "stepper/runtime.rkt"))
   (prefix-out p:
     (combine-out
       make-string-map
@@ -428,13 +426,13 @@
 
 (define exn-brand (gensym 'exn))
 
-;; pyret-error : Loc String String -> p-exn
-(define (pyret-error loc type message)
-  (define full-error (exn+loc->message (mk-str message) loc))
+;; pyret-error : Info String String -> p-exn
+(define (pyret-error info type message)
+  (define full-error (exn+loc->message (mk-str message) info))
   (define obj (mk-object (make-string-map 
     (list (cons "message" (mk-str message))
           (cons "type" (mk-str type))))))
-  (mk-pyret-exn full-error loc obj #t))
+  (mk-pyret-exn full-error info obj #t))
 
 ;; get-raw-field : Loc Value String -> Value
 (define (get-raw-field loc v f)

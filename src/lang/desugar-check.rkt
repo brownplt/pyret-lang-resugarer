@@ -12,9 +12,9 @@
 (define (get-checks stmts)
   (define (add-check stmt lst)
     (match stmt
-      [(s-fun s name _ _ _ _ _ check)
+      [(s-fun (info s _) name _ _ _ _ _ check)
        (cons (check-info s name check) lst)]
-      [(s-data s name _ _ _ check)
+      [(s-data (info s _) name _ _ _ check)
        (cons (check-info s name check) lst)]
       [_ lst]))
   (foldl add-check empty stmts))
@@ -23,10 +23,10 @@
 (define (create-check-block s checks)
   (define (create-checker check)
     (match check
-      [(check-info s name body)
-       (define source (srcloc-source s))
-       (define line (srcloc-line s))
-       (define col (srcloc-column s))
+      [(check-info (info loc _) name body)
+       (define source (srcloc-source loc))
+       (define line (srcloc-line loc))
+       (define col (srcloc-column loc))
        (define srcloc-str (format "~a:~a:~a" source line col))
        (define check-fun
         (s-lam s

@@ -1,6 +1,6 @@
 #lang racket
 
-(require "runtime.rkt")
+(require "data.rkt")
 (require "../ast.rkt")
 (require "grammar.rkt")
 (require parser-tools/lex)
@@ -8,7 +8,7 @@
 (require racket/serialize)
 (require rackunit)
 
-(provide (all-defined-out))
+(provide ast->string string->ast)
 
 (define (ast->string x)
   (aterm->string (ast->aterm x)))

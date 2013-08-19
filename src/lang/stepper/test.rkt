@@ -5,16 +5,18 @@
 (require "../get-syntax.rkt")
 (require "../parser.rkt")
 (require "data.rkt")
-(require "desugar.rkt")
+(require "runtime.rkt")
 
-(set-debug-communication! #t) 
+(set-debug-communication! #f) 
 
 (define (parse filename fileport)
   (s-prog-block (parse-program (get-syntax filename fileport))))
 
 (define (test-desugar filename)
-  (display (desugar (parse filename (open-input-file filename))))
-  ;(display (pretty (desugar (parse filename (open-input-file filename)))))
+  (display (pretty (parse filename (open-input-file filename))))
+  (newline) (display "-->") (newline)
+  (display (pretty (resugarer:desugar "." "Block"
+                    (parse filename (open-input-file filename)))))
   (newline) (newline))
 
 (test-desugar "tests/ahoy-world.arr")

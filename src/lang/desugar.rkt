@@ -8,7 +8,8 @@
   "pretty.rkt"
   "load.rkt")
 
-(define (build-location s)
+(define (build-location i)
+  (define s (info-loc i))
   (define (serialize-source e)
     (cond
       [(symbol? e) (symbol->string e)]
@@ -354,7 +355,7 @@
                         (list
                           (s-app s
                             (s-bracket s (s-id s 'error) (s-str s "cases-miss"))
-                            (list
+                            (listd
                               (s-str s "cases: no cases matched")
                               (build-location s)
                               (s-list s (list)))))))))

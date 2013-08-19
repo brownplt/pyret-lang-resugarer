@@ -19,7 +19,7 @@
 
 (define (tp-loc l)
   (match l
-    [(srcloc path line col start span)
+    [(info (srcloc path line col start span) _)
      (build loc path line col)]))
 
 (define (to-pyret ast)

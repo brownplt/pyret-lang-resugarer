@@ -15,6 +15,7 @@
 
 (define (vary-pretty ast ind)
   (define pretty (curryr vary-pretty ind))
+  (define next-pretty (lambda (ast) (vary-pretty ast (increase-indent ind))))
   (define indent (make-string ind #\space))
   (define next-indent (make-string (increase-indent ind) #\space))
   (define (pretty-bind b)
@@ -25,6 +26,14 @@
     (match ast
       [(s-data-field s name value)
        (format "[~a] : ~a" (pretty name) (pretty value))]))
+  (define (pretty-if-branch br ind)
+    (format "~aelse if ~a:\n~a~a\n"
+            indent
+            (next-pretty (s-if-branch-expr br))
+            next-indent
+            (next-pretty (s-if-branch-body br))))
+  (define (pretty-if-branches brs ind)
+    (string-join (map (λ (br) (pretty-if-branch br ind)) brs) "\n"))
   (match ast
     [(s-block s stmts)
      (define strs (map pretty stmts))
@@ -33,6 +42,23 @@
      (format "var ~a = ~a" (pretty-bind bnd) (pretty val))]
     [(s-let s bnd val)
      (format "~a = ~a" (pretty-bind bnd) (pretty val))]
+    [(s-if _ (cons (s-if-branch _ cond consq) brs))
+     (format "if ~a:\n~a~a\n~a~aend"
+             (next-pretty cond)
+             next-indent
+             (next-pretty consq)
+             (pretty-if-branches brs ind)
+             indent)]
+    [(s-if-else _ (cons (s-if-branch _ cond consq) brs) else)
+     (format "if ~a:\n~a~a\n~a~aelse:\n~a~a\n~aend"
+             (next-pretty cond)
+             next-indent
+             (next-pretty consq)
+             (pretty-if-branches brs ind)
+             indent
+             next-indent
+             (next-pretty else)
+             indent)]
     [(s-lam s typarams args ann doc body check)
      (define s-typarams
        (cond [(cons? typarams) (format "<~a>" (string-join (map symbol->string typarams) ", "))]

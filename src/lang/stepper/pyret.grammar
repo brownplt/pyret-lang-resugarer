@@ -131,6 +131,13 @@ surface
 	ADot : S * String * String -> ADot;
 
 
+    # Temporaries #
+
+#    ReplaceTyparams : [String] * Ann -> Ann;
+#    LookupOp : String -> OpName;
+#    FlattenBlocks : [Block] -> Block;
+
+
   constructors
 
     Prog : S * [Header] * Block -> Prog;
@@ -195,5 +202,83 @@ surface
 rules
 
   If(s, branches) ->
-    IfElse(s, branches, Block(s, [Expr(App(s, Id(s, "raise"),
-	                                  [Str(s, "if: no tests matchd")]))]));
+    IfElse(s, branches, Block(s,
+      [Expr(App(s, Id(s, "raise"),
+	         [Str(s, "if: no tests matchd")]))]));
+
+  (*
+  Prog(s, imps, block) ->
+    Prog(s, imps
+  # block: flatten-blocks
+  # data: very complex
+  For(s, iter, [ForBind(_, bs, es) ...], ann, body) ->
+    App(s, iter, [Lam(s, [], [bs ...], ann, "", body, Block(s, [])),
+                  es ...]);
+  # fun, lam, method use 'format' and 'if'
+  When(s, test, body) ->
+    IfElse(s, [IfBranch(s, test, body)], Id(s, "p:nothing"));
+  # Cases: uses build-location
+  Cases(s, type, val, cases) ->
+    CasesElse(s, type, val, cases,
+	  Block(s, [App(s, Id(s, "raise"),
+                 [App(s, Bracket(s, Id(s, "error"), Str(s, "cases-miss")),
+                   [Str(s, "cases:no cases matched",
+                        BUILD_LOCATION(s), List(s, []))])])]));
+  CasesElse(s, type, val, [CasesBranch(s2, name, args, body) ...], else) ->
+    App(s, Dot(s, type, "case_matcher"),
+      [val,
+       List(s, [Obj(s,
+          [DataField(s2, Str(s2, "key"), Str(s2, name)),
+           DataField(s2, Str(s2, "action"),
+               Lam(s2, [], args, ABlank, "", body, Block(s2, [])))]) ...]),
+       Lam(s, empty, empty, ABlank, "", else, Block(s, [])),
+       BUILD_LOCATION(s)]);
+  # Try: uses gensym
+  Try(s, try, exn, catch) ->
+    GENSYM exn-id
+    Try(s, try, BindSyntax ...)
+  LeftApp(s, target, fun, args) ->
+    App(s, fun, [target, args ...]);
+  DataField(s, name, value) ->
+    DataField(s, INTERNAL(name), INTERNAL(value));
+  MethodField(s, name, args, ann, doc, body, check) ->
+    DataField(s, name,
+              ADD_TOSTRING(s, "method", (if (s-str? name) (s-str-s name) "")),
+              Method(s, args, ann, doc, body, check));
+  List(s, []) -> Bracket(s, Id(s, "list"), Str(s, "empty"));
+  List(s, [elt1, elt2, elts ...] ->
+    App(s, Bracket(s, Id(s, "list"), Str(s, "link")),
+      [List(s, [elt2, elts ...])]);
+  Dot(s, val, field) -> Bracket(s, val, Str(s, field));
+  Colon(s, obj, field) -> ColonBracket(s, obj, Str(s, field));
+  Paren(s, x) -> x;
+  Not(s, e) -> App(s, Bracket(s, e, Str(s, "_not")), []);
+  # Opis: uses pretty
+  Op(s, "opis", x, y) ->
+    App(s, Bracket(s, Id(s, "checkers"), Str(s, "check-equals")),
+      [Str(s, "--is--"), x, y]);
+  Op(s, "op==", x, y) ->
+    App(s, Bracket(s, Id(s, "builtins"), Str(s, "equiv")), [x, y]);
+  Op(s, "op<>", x, y) ->
+    App(s, Bracket(s, Op(s, "op==", x, y), Str(s, "_not")), []);
+  Op(s, "opor", x, y) ->
+    App(s, Bracket(s, x, Str(s, "_or")),
+           [Lam(s, [], [], ABlank, "", y, Block(s, []))]);
+  Op(s, "opand", x, y) ->
+    App(s, Bracket(s, x, Str(s, "_and")),
+           [Lam(s, [], [], ABlank, "", y, Block(s, []))]);
+  Op(s, op, x, y) ->
+    App(s, Bracket(s, x, Str(s, LookupOp(op))), [y]);
+  
+  LookupOp("op+") -> "_plus";
+  LookupOp("op-") -> "_minus";
+  LookupOp("op*") -> "_times";
+  # etc.
+
+  FlattenBlocks([]) -> ...;
+  FlattenBlocks(block) -> block;
+  FlattenBlocks([Block(s, stmts), Block(_, []), blocks ...]) ->
+    FlattenBlocks([Block(s, stmts), blocks ...]);
+  FlattenBlocks([Block(s, [x, ...]), Block(_, [y, ys ...]), blocks ...]) ->
+    CANNOT WRITE APPEND!
+  *)

@@ -51,25 +51,8 @@
 (define-setting DEBUG_VARS          set-debug-vars!          #f)
 (define-setting HIDE_EXTERNAL_CALLS set-hide-external-calls! #t)
 (define-setting DEBUG_STEPS         set-debug-steps!         #f)
-(define-setting DEBUG_TAGS          set-debug-tags!          #f)
 (define-setting HIDE_UNDEFINED      set-hide-undefined!      #t)
 (define-setting DEBUG_COMMUNICATION set-debug-communication! #f)
-
-;; Emission
-
-(define (reconstruct-stack x stk)
-  (if (empty? stk)
-      x
-      (reconstruct-stack ((car stk) x) (cdr stk))))
-
-(define (display-skip t)
-  (display (format "SKIP: ~a\n" (pretty t))))
-
-(define (display-step t)
-  (display (format "~a\n" (pretty t))))
-
-(define (emit t stk)
-  (display-step (reconstruct-stack t stk)))
 
 (define expand (make-parameter #f))
 (define unexpand (make-parameter #f))

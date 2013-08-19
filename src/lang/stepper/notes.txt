@@ -1,0 +1,43 @@
+CAN RESUGAR:
+list
+when
+if-else
+data-field
+all ops (+, or, ==, etc.)
+not
+left-app
+dot
+colon
+paren
+for
+
+CANNOT RESUGAR:
+cases (almost; just need to reify srclocs)
+cases-else (almost; just need to reify srclocs)
+try (gensym)
+block (append)
+fun (string manipulation)
+lam (string manipulation)
+method (string manipulation)
+imports (string manipulation)
+method-field (string manipulation)
+data (very complex; haven't inspected)
+
+DONT NEED TO RESUGAR (desugaring is the identitity on these):
+id
+num
+bool
+str
+obj
+bind
+prog
+all annotations
+var
+let
+if-branch
+app
+assign
+bracket
+conon-bracket
+extend
+
