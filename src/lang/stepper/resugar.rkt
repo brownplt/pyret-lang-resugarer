@@ -4,11 +4,22 @@
 (require "convert-ast.rkt")
 (require "../ast.rkt")
 (require "../pretty.rkt")
+; debugging:
+(require "../desugar.rkt")
+
+(set-debug-desugar! #t)
 
 (provide (rename-out
           [with-resugaring resugarer:with-resugaring]
           [desugar resugarer:desugar]
-          [emit resugarer:emit]))
+          [emit resugarer:emit])
+         (prefix-out s:
+           (combine-out
+            (struct-out srcloc)
+            (struct-out info)
+            (struct-out Var)
+            (struct-out Func)
+            (struct-out Cont))))
 
 (define (send-command cmd out)
   (when DEBUG_COMMUNICATION (display cmd) (newline))
@@ -34,7 +45,7 @@
           [(strip-prefix "error: " response)
            => (λ (msg) (error msg))])))
 
-(define-syntax-rule (with-resugaring dir expr ...)
+(define-syntax-rule (with-resugaring dir expr exprs ...)
   (begin
     (current-locale "en_US.UTF-8") ; How to make Racket read in unicode?
     (let [[cmd-file (string-append dir "/Resugarer")]
@@ -44,11 +55,15 @@
       (parameterize
           [[expand (λ (t sort)
              (send-command (format "desugar ~a ~a\n" sort (ast->string t)) out)
-             (receive-response in err))]
+             (if DEBUG_DESUGAR
+                 (let [[response (receive-response in err)]]
+                   (display (format "desugaring...\n  --std-->\n~a\n  --new-->\n~a\n\n" (pretty (desugar-pyret t)) (pretty response)))
+                   response)
+             (receive-response in err)))]
            [unexpand (λ (t sort)
              (send-command (format "resugar ~a ~a\n" sort (ast->string t)) out)
              (receive-response in err))]]
-        (let [[result (begin expr ...)]]
+        (let [[result (begin expr exprs ...)]]
           (subprocess-kill resugarer #t)
           result))))))
 

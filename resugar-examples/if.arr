@@ -1,3 +1,5 @@
+#lang pyret
+
 if false:
-  print("ok")
+  print("not ok")
 end

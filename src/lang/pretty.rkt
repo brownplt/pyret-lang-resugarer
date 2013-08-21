@@ -60,6 +60,9 @@
     
     [(? symbol? ast) (symbol->string ast)]
     
+    [(s-prog _ imps block)
+     (apply newlines (append (map pretty imps) (list (pretty block))))]
+    
     [(s-block _ stmts)
      (apply newlines (map pretty stmts))]
     

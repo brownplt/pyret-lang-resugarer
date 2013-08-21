@@ -24,7 +24,7 @@
   "compile.rkt"
   "load.rkt"
   "runtime.rkt"
-  "stepper/runtime.rkt")
+  "settings.rkt")
 
 (define resugarer-dir "src/lang/stepper")
 
@@ -36,8 +36,8 @@
       (well-formed
        (parse-eval stx)))))))
 
-(define (pyret->racket src in #:toplevel [toplevel #f] #:check [check #f]
-                       #:resugar [resugar #f])
+(define (pyret->racket src in #:toplevel [toplevel #f] #:check [check #f])
+  (define resugar (param-compile-resugar-mode))
   (define desugar
     (cond
       [resugar (lambda (e) (resugarer:desugar resugarer-dir "Prog" e))]
@@ -49,6 +49,7 @@
   (define well-formed-stx (well-formed parsed-stx))
   (define desugared (desugar well-formed-stx))
   (define compiled (compile (contract-check-pyret desugared) resugar))
+  ;(when resugar (display (format "\n~a\n\n" (syntax->datum compiled))))
   (strip-context compiled))
 
 (define (repl-eval-pyret src in)

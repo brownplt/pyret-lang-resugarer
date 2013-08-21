@@ -3,7 +3,7 @@
 ;(require racket/set ;; set add union member intersect map)
 (require (for-syntax racket/base))
 (require "string-map.rkt")
-(require "stepper/runtime.rkt")
+(require "stepper/resugar.rkt")
 (require "ast.rkt")
 
 (define (hash-fold f h init)
@@ -59,7 +59,7 @@
 
 (provide
  (all-from-out "ast.rkt")
- (all-from-out "stepper/runtime.rkt")
+ (all-from-out "stepper/resugar.rkt")
   (prefix-out p:
     (combine-out
       make-string-map

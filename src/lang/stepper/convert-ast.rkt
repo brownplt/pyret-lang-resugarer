@@ -24,10 +24,7 @@
      (srcloc src line col pos span)]))
 
 (define (srcloc->aterm s)
-  (match s
-    [(srcloc src line col pos span)
-     (Node 'S (list (symbol->string (src->module-name src))
-                    line col pos span))]))
+  (Node 'S (reify-srcloc s)))
 
 (define (tagged-node info lbl xs)
   (when (not (info? info))

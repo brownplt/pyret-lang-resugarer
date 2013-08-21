@@ -18,13 +18,13 @@
 (define (compile-stepping-prelude stx resugar)
   (if resugar
       (with-syntax [[code* stx]]
-        #'(resugarer:with-resugaring
+        #'(resugarer:with-resugaring "src/lang/"
            (r:let []
-            (r:define $emit (r:lambda (x) (resugarer:emit x $stk)))
+            (r:define $emit (r:lambda (z) (resugarer:emit z $stk)))
             (r:define $val (r:quote gremlin))
             (r:define ($set-val! v) (r:set! $val v))
             (r:define $stk (r:list))
-            (r:define ($push! x) (r:set! $stk (r:cons x $stk)))
+            (r:define ($push! z) (r:set! $stk (r:cons z $stk)))
             (r:define ($pop!) (r:set! $stk (r:cdr $stk)))
             (r:define ($reset! [stk (r:list)]) (r:set! $stk stk))
             code*)))
@@ -47,14 +47,14 @@
 (define (annot/frame expr_ frame_)
   (with-syntax [[expr* expr_]
                 [frame* (make-frame frame_)]]
-    #'(begin ($push! frame*)
-             (set-val! expr*)
-             ($pop!)
-             $val)))
+    #'(r:begin ($push! frame*)
+               ($set-val! expr*)
+               ($pop!)
+               $val)))
 
 (define (make-frame body_)
   (with-syntax [[body* body_]]
-    #'(λ (__) body*)))
+    #'(r:lambda (__) body*)))
 
 #|
 ; Annotate function argument expressions
@@ -125,15 +125,22 @@
     ; strip off "struct:"
     (let [[name (substring (symbol->string struct-name) 7)]]
       (datum->syntax #f name)))
-  (cond [(string? x) #'x]
-        [(symbol? x) #'x]
+  (cond [(string? x) (datum->syntax #f x)]
+        [(symbol? x) (datum->syntax #f x)]
         [(list? x)
          (with-syntax [[(xs* ...) (map adorn x)]]
            #'(list xs* ...))]
         [(s-id? x)
          (with-syntax [[v* (s-id-id x)]]
-           #'(Var 'v* v*))]
-        [(info? x) #'x]
+           #'(s:Var (r:quote v*) v*))]
+        [(info? x)
+         (with-syntax [[loc* (adorn (info-loc x))]
+                       [(tags* ...) (info-tags x)]]
+           #'(s:info loc* (r:list tags* ...)))]
+        [(srcloc? x)
+         (match (reify-srcloc x)
+           [(list src line col pos span)
+            #`(s:srcloc #,src #,line #,col #,pos #,span)])]
         [(struct? x)
          (let* [[children (vector->list (struct->vector x))]
                 [constr (struct-name->constr (car children))]
@@ -361,17 +368,6 @@
           (attach l
                   #`((p:pyret-true? #,(compile-expr test env))
                      #,(compile-expr block env)))]))
-     #|
-             (if resugar
-                 (with-syntax [[(v*) (generate-temporaries #'(x))]]
-                 #`(r:let [[v* #,(annot/frame
-                                  (compile-expr test)
-                                  #`(s-if-branch #,s __ #,(adorn block)))]]
-                     ($emit (s-if-branch #,s v* block*))
-                     ((p:pyret-true? v*) #,(compile-expr block env))))
-                 #`((p:pyret-true? #,(compile-expr test env))
-                     #,(compile-expr block env))))]))
-|#
      (attach l
         (if (not resugar)
      ; w/o resugar:
@@ -380,25 +376,24 @@
             (match c-bs
      ; w/ resugar:
      [(list)
-      #`(compile-expr else-block)]
+      (compile-expr else-block env)]
      [(cons (s-if-branch s test block) brs)
-      (with-syntax [[(v*) (generate-temporaries #'(x))]]
+      (with-syntax [[(v*) (generate-temporaries #'(var))]]
         #`(r:let [[v* #,(annot/frame
-                        (compile-expr test)
+                        (compile-expr test env)
                         #`(s-if-else
                            #,l
                            (r:cons (s-if-branch #,l __ #,(adorn block))
-                                   #,(map adorn brs))
+                                   (list #,@(map adorn brs)))
                            #,(adorn else-block)))]]
                  ($emit (s-if-else
                          #,l
                          (r:cons (s-if-branch #,l v* #,(adorn block))
-                                 #,(map adorn brs))
+                                 (list #,@(map adorn brs)))
                          #,(adorn else-block)))
-              (if (p:pyret-true? v*)
-                  #,(compile-expr block)
-                  #,(compile-expr (s-if-else l (cdr c-bs) else-block)))))])))]
-                  
+              (r:if (p:pyret-true? v*)
+                  #,(compile-expr block env)
+                  #,(compile-expr (s-if-else l (cdr c-bs) else-block) env))))])))]
     
     [(s-try l try (s-bind l2 id ann) catch)
      (attach l
@@ -497,13 +492,13 @@
   (attach l
    (with-syntax ([(req ...) (map compile-hdr (filter s-import? headers))]
                  [(prov ...) (map compile-hdr (filter s-provide? headers))])
-     (compile-stepping-prelude
-      #`(r:begin req ... #,(compile-pyret block resugar) prov ...)
-      resugar))))
+      #`(r:begin req ... #,(compile-pyret block resugar) prov ...))))
 
 (define (compile-pyret ast resugar)
   (match ast
-    [(s-prog l headers block) (compile-prog l headers block resugar)]
+    [(s-prog l headers block)
+     (compile-stepping-prelude (compile-prog l headers block resugar)
+                               resugar)]
     [(s-block l stmts)
      (match-define (s-block l2 new-stmts) (lift-constants ast))
      (with-syntax ([(stmt ...) (compile-block l2 new-stmts (compile-env (set) #t) resugar)])

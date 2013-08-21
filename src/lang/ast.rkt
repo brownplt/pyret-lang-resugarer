@@ -33,6 +33,17 @@ these metadata purposes.
     [else (error (format "Non-symbol, non-string, non-path value for
                           source: ~a" e))]))
 
+(define (reify-srcloc s)
+  (define (encode-pos p)
+    (if (integer? p) p 1)) ; hack
+  (match s
+    [(srcloc src line col pos span)
+     (list (symbol->string (src->module-name src))
+           (encode-pos line)
+           (encode-pos col)
+           (encode-pos pos)
+           (encode-pos span))]))
+
 ;; s-prog : srcloc (Listof Header) s-block -> s-prog
 (struct s-prog (syntax imports block) #:transparent)
 

@@ -5,7 +5,7 @@
 (require "../get-syntax.rkt")
 (require "../parser.rkt")
 (require "data.rkt")
-(require "runtime.rkt")
+(require "resugar.rkt")
 
 (set-debug-communication! #f)
 
@@ -13,11 +13,15 @@
   (s-prog-block (parse-program (get-syntax filename fileport))))
 
 (define (test-desugar filename)
-  (display (pretty (parse filename (open-input-file filename))))
-  (newline) (display "-->") (newline)
-  (display (pretty (resugarer:desugar "." "Block"
-                    (parse filename (open-input-file filename)))))
-  (newline) (newline))
+  (let [[ast (s-prog (empty-info 'test)
+                     (list)
+                     (parse filename (open-input-file filename)))]]
+  (display (pretty ast))
+  (display "\n-->\n")
+  (display (pretty (resugarer:desugar "." "Prog" ast)))
+  (display "\n\n")))
+
+(set-debug-desugar! #f)
 
 (test-desugar "tests/op.arr")
 (test-desugar "tests/list.arr")

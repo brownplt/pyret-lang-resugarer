@@ -107,13 +107,16 @@
     (define-values (base name dir?) (split-path pyret-file))
     (define (run)
       (cond
+        [resugar-mode
+         (parameterize ([param-compile-resugar-mode #t])
+           (dynamic-require pyret-file #f))]
         [check-mode
          (parameterize ([param-compile-check-mode #t]
                         [current-load-relative-directory base])
            (define results
             (eval
               (pyret->racket pyret-file (open-input-file pyret-file)
-                             #:check #t #:resugar resugar-mode)
+                             #:check #t)
               (make-fresh-namespace)))
            (print-check-results results))]
         [else
