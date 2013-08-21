@@ -1,7 +1,7 @@
 core
   values
 
-	S : String -> S;
+	S : String * Int * Int * Int * Int -> S;
 	Expr : Expr -> Stmt;
 
 	List : S * [Expr] -> Expr;
@@ -20,8 +20,8 @@ core
 
 	# Annotations #
 
-	ABlank : S -> Ann;
-	AAny : S -> Ann;
+	ABlank : Ann;
+	AAny : Ann;
 	AName : S * String -> Ann;
 	AArrow : S * [Ann] * Ann -> Ann;
 	AMethod : S * [Ann] * Ann -> Ann;
@@ -53,7 +53,6 @@ core
 	Fun : S * String * [String] * [Bind] * Ann * String * Block * Block -> Stmt;
 	Var : S * Bind * Expr -> Stmt;
 	Let : S * Bind * Expr -> Stmt;
-	When : S * [Expr] * Block -> Stmt;
 	Try : S * Expr * Bind * Expr -> Stmt;
 	
 	IfElse : S * [IfBranch] * Block -> Stmt;
@@ -73,10 +72,6 @@ core
 
     # Expressions #
 
-    Op : S * String * Expr * Expr -> Expr;
-	Not : S * Expr -> Expr;
-	Paren : S * Expr -> Expr;
-	
 	App : S * Expr * [Expr] -> Expr;
 	LeftApp : S * Expr * Expr * [Expr] -> Expr;
 	Assign : S * String * Expr -> Expr;
@@ -84,7 +79,7 @@ core
 	Dot : S * Expr * String -> Expr;
 	Bracket : S * Expr * Expr -> Expr;
 
-	Colon : S * Expr * Symbol -> Expr;
+	Colon : S * Expr * String -> Expr;
 	ColonBracket : S * Expr * Expr -> Expr;
 
 	For : S * Expr * [ForBind] * Ann * Block -> Expr;
@@ -99,7 +94,7 @@ surface
 
   values
 
-    S : String -> S;
+    S : String * Int * Int * Int * Int -> S;
 	Expr : Expr -> Stmt;
 
 	List : S * [Expr] -> Expr;
@@ -118,8 +113,8 @@ surface
 
 	# Annotations #
 
-	ABlank : S -> Ann;
-	AAny : S -> Ann;
+	ABlank : Ann;
+	AAny : Ann;
 	AName : S * String -> Ann;
 	AArrow : S * [Ann] * Ann -> Ann;
 	AMethod : S * [Ann] * Ann -> Ann;
@@ -158,7 +153,7 @@ surface
 	Fun : S * String * [String] * [Bind] * Ann * String * Block * Block -> Stmt;
 	Var : S * Bind * Expr -> Stmt;
 	Let : S * Bind * Expr -> Stmt;
-	When : S * [Expr] * Block -> Stmt;
+	When : S * Expr * Block -> Stmt;
 	Try : S * Expr * Bind * Expr -> Stmt;
 	
 	If : S * [IfBranch] -> Stmt;
@@ -179,10 +174,10 @@ surface
 
     # Expressions #
 
-    Op : S * String * Expr * Expr -> Expr;
-	Not : S * Expr -> Expr;
 	Paren : S * Expr -> Expr;
 	
+	Not : S * Expr -> Expr;
+    Op : S * String * Expr * Expr -> Expr;
 	App : S * Expr * [Expr] -> Expr;
 	LeftApp : S * Expr * Expr * [Expr] -> Expr;
 	Assign : S * String * Expr -> Expr;
@@ -190,7 +185,7 @@ surface
 	Dot : S * Expr * String -> Expr;
 	Bracket : S * Expr * Expr -> Expr;
 
-	Colon : S * Expr * Symbol -> Expr;
+	Colon : S * Expr * String -> Expr;
 	ColonBracket : S * Expr * Expr -> Expr;
 
 	For : S * Expr * [ForBind] * Ann * Block -> Expr;
@@ -204,19 +199,52 @@ rules
   If(s, branches) ->
     IfElse(s, branches, Block(s,
       [Expr(App(s, Id(s, "raise"),
-	         [Str(s, "if: no tests matchd")]))]));
+	         [Str(s, "if: no tests matched")]))]));
+  Not(s, e) -> App(s, Bracket(s, e, Str(s, "_not")), []);
+  # Opis: uses pretty
+  Op(s, "is", x, y) ->
+    App(s, Bracket(s, Id(s, "checkers"), Str(s, "check-equals")),
+      [Str(s, "--is--"), x, y]);
+  Op(s, "==", x, y) ->
+    App(s, Bracket(s, Id(s, "builtins"), Str(s, "equiv")), [x, y]);
+  Op(s, "<>", x, y) ->
+    App(s, Bracket(s, Op(s, "==", x, y), Str(s, "_not")), []);
+  Op(s, "or", x, y) ->
+    App(s, Bracket(s, x, Str(s, "_or")),
+           [Lam(s, [], [], ABlank, "", Block(s, [Expr(y)]), Block(s, []))]);
+  Op(s, "and", x, y) ->
+    App(s, Bracket(s, x, Str(s, "_and")),
+           [Lam(s, [], [], ABlank, "", y, Block(s, []))]);
+  Op(s, "+", x, y)  -> App(s, Bracket(s, x, Str(s, "_plus")), [y]);
+  Op(s, "-", x, y)  -> App(s, Bracket(s, x, Str(s, "_minus")), [y]);
+  Op(s, "*", x, y)  -> App(s, Bracket(s, x, Str(s, "_times")), [y]);
+  Op(s, "/", x, y)  -> App(s, Bracket(s, x, Str(s, "_divide")), [y]);
+  Op(s, "<=", x, y) -> App(s, Bracket(s, x, Str(s, "_lessequal")), [y]);
+  Op(s, "<", x, y)  -> App(s, Bracket(s, x, Str(s, "_lessthan")), [y]);
+  Op(s, ">=", x, y) -> App(s, Bracket(s, x, Str(s, "_greaterequal")), [y]);
+  Op(s, ">", x, y)  -> App(s, Bracket(s, x, Str(s, "_greaterthan")), [y]);
+  List(s, []) -> Bracket(s, Id(s, "list"), Str(s, "empty"));
+  List(s, [elt, elts ...]) ->
+    App(s, Bracket(s, Id(s, "list"), Str(s, "link")),
+      [elt, List(s, [elts ...])]);
+  When(s, test, body) ->
+    IfElse(s, [IfBranch(s, test, body)],
+      Block(s, [Expr(Id(s, "p:nothing"))]));
+  Dot(s, val, field) -> Bracket(s, val, Str(s, field));
+  Colon(s, obj, field) -> ColonBracket(s, obj, Str(s, field));
+  Paren(s, x) -> x;
+  For(s, iter, [ForBind(s2, bs, es) ...], ann, body) ->
+    App(s, iter, [Lam(s, [], [bs ...], ann, "", body, Block(s, [])),
+                  es ...]);
+  LeftApp(s, target, fun, [args ...]) ->
+    App(s, fun, [target, args ...]);
 
   (*
   Prog(s, imps, block) ->
     Prog(s, imps
   # block: flatten-blocks
   # data: very complex
-  For(s, iter, [ForBind(_, bs, es) ...], ann, body) ->
-    App(s, iter, [Lam(s, [], [bs ...], ann, "", body, Block(s, [])),
-                  es ...]);
   # fun, lam, method use 'format' and 'if'
-  When(s, test, body) ->
-    IfElse(s, [IfBranch(s, test, body)], Id(s, "p:nothing"));
   # Cases: uses build-location
   Cases(s, type, val, cases) ->
     CasesElse(s, type, val, cases,
@@ -237,44 +265,13 @@ rules
   Try(s, try, exn, catch) ->
     GENSYM exn-id
     Try(s, try, BindSyntax ...)
-  LeftApp(s, target, fun, args) ->
-    App(s, fun, [target, args ...]);
   DataField(s, name, value) ->
-    DataField(s, INTERNAL(name), INTERNAL(value));
+    DataField(s, name, value);
   MethodField(s, name, args, ann, doc, body, check) ->
     DataField(s, name,
               ADD_TOSTRING(s, "method", (if (s-str? name) (s-str-s name) "")),
               Method(s, args, ann, doc, body, check));
-  List(s, []) -> Bracket(s, Id(s, "list"), Str(s, "empty"));
-  List(s, [elt1, elt2, elts ...] ->
-    App(s, Bracket(s, Id(s, "list"), Str(s, "link")),
-      [List(s, [elt2, elts ...])]);
-  Dot(s, val, field) -> Bracket(s, val, Str(s, field));
-  Colon(s, obj, field) -> ColonBracket(s, obj, Str(s, field));
-  Paren(s, x) -> x;
-  Not(s, e) -> App(s, Bracket(s, e, Str(s, "_not")), []);
-  # Opis: uses pretty
-  Op(s, "opis", x, y) ->
-    App(s, Bracket(s, Id(s, "checkers"), Str(s, "check-equals")),
-      [Str(s, "--is--"), x, y]);
-  Op(s, "op==", x, y) ->
-    App(s, Bracket(s, Id(s, "builtins"), Str(s, "equiv")), [x, y]);
-  Op(s, "op<>", x, y) ->
-    App(s, Bracket(s, Op(s, "op==", x, y), Str(s, "_not")), []);
-  Op(s, "opor", x, y) ->
-    App(s, Bracket(s, x, Str(s, "_or")),
-           [Lam(s, [], [], ABlank, "", y, Block(s, []))]);
-  Op(s, "opand", x, y) ->
-    App(s, Bracket(s, x, Str(s, "_and")),
-           [Lam(s, [], [], ABlank, "", y, Block(s, []))]);
-  Op(s, op, x, y) ->
-    App(s, Bracket(s, x, Str(s, LookupOp(op))), [y]);
   
-  LookupOp("op+") -> "_plus";
-  LookupOp("op-") -> "_minus";
-  LookupOp("op*") -> "_times";
-  # etc.
-
   FlattenBlocks([]) -> ...;
   FlattenBlocks(block) -> block;
   FlattenBlocks([Block(s, stmts), Block(_, []), blocks ...]) ->

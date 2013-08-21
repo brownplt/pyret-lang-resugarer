@@ -8,8 +8,8 @@
   "pretty.rkt"
   "load.rkt")
 
-(define (build-location i)
-  (define s (info-loc i))
+(define (build-location s)
+  (define loc (info-loc s))
   (define (serialize-source e)
     (cond
       [(symbol? e) (symbol->string e)]
@@ -21,9 +21,9 @@
   (s-app s
     (s-bracket s (s-id s 'error) (s-str s "location"))
     (list
-      (s-str s (serialize-source (srcloc-source s)))
-      (s-num s (srcloc-line s))
-      (s-num s (srcloc-column s)))))
+      (s-str s (serialize-source (srcloc-source loc)))
+      (s-num s (srcloc-line loc))
+      (s-num s (srcloc-column loc)))))
 
 ;; variant checker name
 (define (make-checker-name s)
@@ -352,10 +352,11 @@
                 (list
                  (s-app s
                         (s-id s 'raise)
-                        (list
+			(list (s-str s "cases: no cases matched"))
+                        #;(list
                           (s-app s
                             (s-bracket s (s-id s 'error) (s-str s "cases-miss"))
-                            (listd
+                            (list
                               (s-str s "cases: no cases matched")
                               (build-location s)
                               (s-list s (list)))))))))

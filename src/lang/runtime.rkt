@@ -4,6 +4,7 @@
 (require (for-syntax racket/base))
 (require "string-map.rkt")
 (require "stepper/runtime.rkt")
+(require "ast.rkt")
 
 (define (hash-fold f h init)
   (when (not (hash? h)) (error (format "Bad fold: ~a ~a ~a" f h init)))
@@ -57,8 +58,8 @@
        (string-join (rest strs) sep)))]))
 
 (provide
-  (prefix-out s:
-    (all-from-out "stepper/runtime.rkt"))
+ (all-from-out "ast.rkt")
+ (all-from-out "stepper/runtime.rkt")
   (prefix-out p:
     (combine-out
       make-string-map

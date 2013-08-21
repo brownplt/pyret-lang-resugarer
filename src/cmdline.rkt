@@ -16,6 +16,7 @@
   racket/pretty
   racket/runtime-path
   "lang/reader.rkt"
+  "lang/ast.rkt"
   racket/syntax)
 
 (define-runtime-path pyret-lang-racket "lang/pyret-lang-racket.rkt")

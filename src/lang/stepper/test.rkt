@@ -7,7 +7,7 @@
 (require "data.rkt")
 (require "runtime.rkt")
 
-(set-debug-communication! #f) 
+(set-debug-communication! #f)
 
 (define (parse filename fileport)
   (s-prog-block (parse-program (get-syntax filename fileport))))
@@ -19,5 +19,10 @@
                     (parse filename (open-input-file filename)))))
   (newline) (newline))
 
-(test-desugar "tests/ahoy-world.arr")
+(test-desugar "tests/op.arr")
+(test-desugar "tests/list.arr")
+(test-desugar "tests/when.arr")
 (test-desugar "tests/if.arr")
+(test-desugar "tests/dot-colon-paren.arr")
+(test-desugar "tests/for.arr")
+(test-desugar "tests/left-app.arr")

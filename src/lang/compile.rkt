@@ -15,17 +15,21 @@
   
 ;;; Keeping track of the stack ;;;
 
-(define (compile-stepping-prelude stx)
-  (with-syntax [[code* stx]]
-    #'(r:begin
-       (r:define $val (r:quote gremlin))
-       (r:define ($set-val! v) (r:set! $val v))
-       (r:define $stk (r:list))
-       (r:define ($push! x) (r:set! $stk (r:cons x $stk)))
-       (r:define ($pop!) (r:set! $stk (r:cdr $stk)))
-       (r:define ($reset! [stk (r:list)]) (r:set! $stk stk))
-       code*)))
-  
+(define (compile-stepping-prelude stx resugar)
+  (if resugar
+      (with-syntax [[code* stx]]
+        #'(resugarer:with-resugaring
+           (r:let []
+            (r:define $emit (r:lambda (x) (resugarer:emit x $stk)))
+            (r:define $val (r:quote gremlin))
+            (r:define ($set-val! v) (r:set! $val v))
+            (r:define $stk (r:list))
+            (r:define ($push! x) (r:set! $stk (r:cons x $stk)))
+            (r:define ($pop!) (r:set! $stk (r:cdr $stk)))
+            (r:define ($reset! [stk (r:list)]) (r:set! $stk stk))
+            code*)))
+      stx))
+
 ;;; Stepper ;;;
 
 ; TODO(Justin)
@@ -357,9 +361,44 @@
           (attach l
                   #`((p:pyret-true? #,(compile-expr test env))
                      #,(compile-expr block env)))]))
+     #|
+             (if resugar
+                 (with-syntax [[(v*) (generate-temporaries #'(x))]]
+                 #`(r:let [[v* #,(annot/frame
+                                  (compile-expr test)
+                                  #`(s-if-branch #,s __ #,(adorn block)))]]
+                     ($emit (s-if-branch #,s v* block*))
+                     ((p:pyret-true? v*) #,(compile-expr block env))))
+                 #`((p:pyret-true? #,(compile-expr test env))
+                     #,(compile-expr block env))))]))
+|#
      (attach l
-       (with-syntax ([(branch ...) (d->stx (map compile-if-branch c-bs) l)])
-         #`(r:cond branch ... [#t #,(compile-expr else-block env)])))]
+        (if (not resugar)
+     ; w/o resugar:
+     (with-syntax ([(branch ...) (d->stx (map compile-if-branch c-bs) l)])
+       #`(r:cond branch ... [#t #,(compile-expr else-block env)]))
+            (match c-bs
+     ; w/ resugar:
+     [(list)
+      #`(compile-expr else-block)]
+     [(cons (s-if-branch s test block) brs)
+      (with-syntax [[(v*) (generate-temporaries #'(x))]]
+        #`(r:let [[v* #,(annot/frame
+                        (compile-expr test)
+                        #`(s-if-else
+                           #,l
+                           (r:cons (s-if-branch #,l __ #,(adorn block))
+                                   #,(map adorn brs))
+                           #,(adorn else-block)))]]
+                 ($emit (s-if-else
+                         #,l
+                         (r:cons (s-if-branch #,l v* #,(adorn block))
+                                 #,(map adorn brs))
+                         #,(adorn else-block)))
+              (if (p:pyret-true? v*)
+                  #,(compile-expr block)
+                  #,(compile-expr (s-if-else l (cdr c-bs) else-block)))))])))]
+                  
     
     [(s-try l try (s-bind l2 id ann) catch)
      (attach l
@@ -459,7 +498,8 @@
    (with-syntax ([(req ...) (map compile-hdr (filter s-import? headers))]
                  [(prov ...) (map compile-hdr (filter s-provide? headers))])
      (compile-stepping-prelude
-      #`(r:begin req ... #,(compile-pyret block resugar) prov ...)))))
+      #`(r:begin req ... #,(compile-pyret block resugar) prov ...)
+      resugar))))
 
 (define (compile-pyret ast resugar)
   (match ast

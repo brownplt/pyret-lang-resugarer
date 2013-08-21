@@ -73,7 +73,7 @@ these metadata purposes.
 (struct s-var (syntax name value) #:transparent)
 ;; s-let : srcloc bind Expr -> s-let
 (struct s-let (syntax name value) #:transparent)
-;; s-when : srcloc (Listof Expr) s-block -> s-when
+;; s-when : srcloc Expr s-block -> s-when
 (struct s-when (syntax test block) #:transparent)
 ;; s-if : srcloc (Listof s-if-branch) -> s-if
 (struct s-if (syntax branches) #:transparent)
@@ -147,7 +147,7 @@ these metadata purposes.
   (let [[expr-types (list
      s-op? s-not? s-app? s-left-app? s-assign? s-dot?
      s-bracket? s-colon? s-colon-bracket? s-for? s-for-bind? s-extend?
-     s-list? s-id? s-num? s-bool? s-str?)]]
+     s-list? s-id? s-num? s-bool? s-str? s-paren?)]]
     (ormap (λ (pred) (pred x)) expr-types)))
 
 ;; s-lam : srcloc (Listof Symbol) (Listof s-bind) Ann String s-block s-block -> s-lam

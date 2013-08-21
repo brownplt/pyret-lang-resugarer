@@ -394,12 +394,15 @@ line string\"" (s-str _ "multi\nline string"))
 
 (define cases (test-suite "cases"
 
+#| TODO(justin): Daniel says this test is ambiguous
+
   (check/block "if x:o:f() end"
                (s-if _ (list
                         (s-if-branch
                          _
                          (s-colon _ (s-id _ 'x) 'o)
                          (s-block _ (list (s-app _ (s-id _ 'f) (list))))))))
+|#
 
   (check/block "if false: 5 else: 42 end"
                (s-if-else _ (list (s-if-branch _ (s-bool _ #f) (s-block _ (list (s-num _ 5)))))

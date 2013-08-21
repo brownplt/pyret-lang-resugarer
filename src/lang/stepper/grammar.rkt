@@ -1,6 +1,7 @@
 #lang ragg
 
-term: (node | list | STRING) [tags]
+term: (node | list | STRING | number) [tags]
+number : NUMBER
 node: LABEL "(" terms ")"
 list: "[" terms "]"
 terms: [ term ("," term)* ]

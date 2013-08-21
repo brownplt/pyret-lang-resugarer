@@ -1,15 +1,17 @@
-CAN RESUGAR:
+RESUGAR DONE:
 list
-when
+when -- desugaring rule is incorrect! confuses block/expr.
 if-else
-data-field
-all ops (+, or, ==, etc.)
 not
-left-app
+all ops (+, or, ==, etc.) -- and,or confuse block/expr.
 dot
 colon
 paren
 for
+left-app
+
+CAN RESUGAR:
+data-field
 
 CANNOT RESUGAR:
 cases (almost; just need to reify srclocs)

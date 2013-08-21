@@ -12,9 +12,9 @@
 (define (get-checks stmts)
   (define (add-check stmt lst)
     (match stmt
-      [(s-fun (info s _) name _ _ _ _ _ check)
+      [(s-fun s name _ _ _ _ _ check)
        (cons (check-info s name check) lst)]
-      [(s-data (info s _) name _ _ _ check)
+      [(s-data s name _ _ _ check)
        (cons (check-info s name check) lst)]
       [_ lst]))
   (foldl add-check empty stmts))

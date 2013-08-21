@@ -7,7 +7,8 @@
 
 (provide (rename-out
           [with-resugaring resugarer:with-resugaring]
-          [desugar resugarer:desugar]))
+          [desugar resugarer:desugar]
+          [emit resugarer:emit]))
 
 (define (send-command cmd out)
   (when DEBUG_COMMUNICATION (display cmd) (newline))

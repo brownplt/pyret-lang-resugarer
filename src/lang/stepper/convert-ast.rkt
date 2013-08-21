@@ -5,7 +5,6 @@
 (require "grammar.rkt")
 (require parser-tools/lex)
 (require ragg/support)
-(require racket/serialize)
 (require rackunit)
 
 (provide ast->string string->ast)
@@ -19,13 +18,24 @@
 (define-syntax-rule (node l s xs ...)
   (tagged-node s l (list xs ...)))
 
-(define (tagged-node info lbl xs)'blo
+(define (aterm->srcloc s)
+  (match s
+    [(Node 'S (list src line col pos span))
+     (srcloc src line col pos span)]))
+
+(define (srcloc->aterm s)
+  (match s
+    [(srcloc src line col pos span)
+     (Node 'S (list (symbol->string (src->module-name src))
+                    line col pos span))]))
+
+(define (tagged-node info lbl xs)
   (when (not (info? info))
     (error (format "bad info arg: ~a ~a ~a" info lbl xs)))
-  (let [[srcloc (info-loc info)]
+  (let [[srcloc (srcloc->aterm (info-loc info))]
         [tags (info-tags info)]]
     (if (empty? tags)
-        (Node lbl (cons (Node 'S (list (format "~s" (serialize srcloc)))) xs))
+        (Node lbl (cons srcloc xs))
         (Tagged tags (Node lbl (cons srcloc xs))))))
 
 
@@ -53,8 +63,8 @@
     [(s-obj s ms)        (node 'Obj s (recs ms))]
     [(s-bind s n a)      (node 'Bind s (show-name n) (rec a))]
     ; Annotations
-    [(a-blank)           (node 'ABlank (empty-info 'stepper))]
-    [(a-any)             (node 'AAny (empty-info 'stepper))]
+    [(a-blank)           (Node 'ABlank (list))]
+    [(a-any)             (Node 'AAny (list))]
     [(a-name s n)        (node 'AName (show-name n))]
     [(a-arrow s as a)    (node 'AArrow s (recs as) (rec a))]
     [(a-method s as a)   (node 'AMethod s (recs as) (rec a))]
@@ -82,7 +92,7 @@
                   (rec a) str (rec check) (rec body))]
     [(s-var s b x)       (node 'Var s (rec b) (rec x))]
     [(s-let s b x)       (node 'Let s (rec b) (rec x))]
-    [(s-when s xs b)     (node 'When s (recs xs) (rec b))]
+    [(s-when s x b)      (node 'When s (rec x) (rec b))]
     [(s-try s x b y)     (node 'Try s (rec x) (rec b) (rec y))]
     [(s-if s brs)        (node 'If s (recs brs))]
     [(s-if-else s brs b) (node 'IfElse s (recs brs) (rec b))]
@@ -123,7 +133,7 @@
 (define (aterm->ast x [os (list)])
   (define (rec x) (aterm->ast x))
   (define (recs xs) (map rec (List-terms xs)))
-  (define (syn s) (info (deserialize (read (open-input-string (car (Node-terms s))))) os))
+  (define (syn s)  (info (aterm->srcloc s) os))
   (define (read-name n) (string->symbol n))
   (define (read-names ns) (map string->symbol (List-terms ns)))
   (define (read-number n) (string->number n))
@@ -140,14 +150,14 @@
     [(Node 'Str (list s str))      (s-str (syn s) str)]
     [(Node 'Lam (list s ns bs a doc check block))
      (s-lam (syn s) (read-names ns) (recs bs) (rec a)
-            (rec doc) (rec check) (rec block))]
+            doc (rec check) (rec block))]
     [(Node 'Method (list s bs a doc check block))
      (s-method (syn s) (recs bs) (rec a) (rec doc) (rec check) (rec block))]
     [(Node 'Obj (list s ms))       (s-obj (syn s) (recs ms))]
     [(Node 'Bind (list s n a))     (s-bind (syn s) (read-name n) (rec a))]
     ; Annotations
-    [(Node 'ABlank (list s))       (a-blank)]
-    [(Node 'AAny (list s))         (a-any)]
+    [(Node 'ABlank (list))         (a-blank)]
+    [(Node 'AAny (list))           (a-any)]
     [(Node 'AName (list s n))      (a-name (syn s) (read-name n))]
     [(Node 'AArrow (list s as a))  (a-arrow (syn s) (recs as) (rec a))]
     [(Node 'AMethod (list s as a)) (a-method (syn s) (recs as) (rec a))]
@@ -173,7 +183,7 @@
             (recs bs) (rec a) str (rec check) (rec body))]
     [(Node 'Var (list s b x))      (s-var (syn s) (rec b) (rec x))]
     [(Node 'Let (list s b x))      (s-let (syn s) (rec b) (rec x))]
-    [(Node 'When (list s xs b))    (s-when (syn s) (recs xs) (rec b))]
+    [(Node 'When (list s x b))     (s-when (syn s) (rec x) (rec b))]
     [(Node 'Try (list s x b y))    (s-try (syn s) (rec x) (rec b) (rec y))]
     [(Node 'If (list s brs))       (s-if (syn s) (recs brs))]
     [(Node 'IfElse (list s brs b)) (s-if-else (syn s) (recs brs) (rec b))]
@@ -238,6 +248,8 @@
        (string-append (show-aterm t) (show-origins os))]
       [(? string? t)
        (show-string t)]
+      [(? integer? t)
+       (number->string t)]
       [t
        (error (format "aterm->string: invalid aterm ~a" t))]))
   (show-aterm t))
@@ -252,6 +264,7 @@
     (substring str 1 (- (string-length str) 1)))
   (define (ragg->aterm x)
     (match x
+      [`(number ,x)        (string->number x)]
       [(? string? x)       (strip-quotes x)]
       [`(tag "Body")       (MacBody)]
       [`(tag "Alien")      (Alien)]
