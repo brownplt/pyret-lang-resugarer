@@ -7,3 +7,6 @@
 [submodule "lib/whalesong"]
 	path = lib/whalesong
 	url = https://github.com/jpolitz/whalesong
+[submodule "lib/Resugarer"]
+	path = lib/Resugarer
+	url = https://github.com/brownplt/Resugarer.git
