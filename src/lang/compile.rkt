@@ -2,7 +2,9 @@
 
 (provide
   compile-pyret
-  compile-expr)
+  compile-expr
+  ; for testing:
+  adorn)
 (require
   racket/match
   racket/splicing
@@ -20,29 +22,13 @@
       (with-syntax [[code* stx]]
         #'(resugarer:with-resugaring "src/lang/"
            (r:let []
-            (r:define $emit (r:lambda (z) (resugarer:emit z $stk)))
-            (r:define $val (r:quote gremlin))
-            (r:define ($set-val! v) (r:set! $val v))
-            (r:define $stk (r:list))
-            (r:define ($push! z) (r:set! $stk (r:cons z $stk)))
-            (r:define ($pop!) (r:set! $stk (r:cdr $stk)))
-            (r:define ($reset! [stk (r:list)]) (r:set! $stk stk))
+            (r:define $emit (r:lambda (z)
+               (resugarer:emit z)))
             code*)))
       stx))
 
 ;;; Stepper ;;;
 
-; TODO(Justin)
-; Not yet supported: imports, annotations
-#|
-; Top level
-(define (annotate term)
-  (with-syntax [[t* (annot/eval term)]]
-    #'(begin (s:reset!)
-             (let [[$result t*]]
-               (s:emit $result)
-               $result))))
-|#
 ; Push a frame onto the stack (and pop it after)
 (define (annot/frame expr_ frame_)
   (with-syntax [[expr* expr_]
@@ -78,61 +64,20 @@
 (define (annot/call func_ args_)
   (error "annot/call NYI"))
 
-#|
-(define ast-constructor-table
-  (make-immutable-hash
-   (list `(s-prog . ,#'s:s-prog)
-         `(s-import . ,#'s:s-import)
-         `(s-provide . ,#'s:s-provide)
-         `(s-provide-all . ,#'s:s-provide-all)
-         `(s-block . ,#'s:s-block)
-         `(s-fun . ,#'s:s-fun)
-         `(s-var . ,#'s:s-var)
-         `(s-let . ,#'s:s-let)
-         `(s-when . ,#'s:s-when)
-         `(s-try . ,#'s:s-try)
-         `(s-if-else . ,#'s:s-if-else)
-         `(s-if-branch . ,#'s:s-if-branch)
-         `(s-cases . ,#'s:s-cases)
-         `(s-cases-else . ,#'s:s-cases-else)
-         `(s-cases-branch . ,#'s:s-cases-branch)
-         `(s-data . ,#'s:s-data)
-         `(s-variant . ,#'s:s-variant)
-         `(s-singleton-variant . ,#'s:s-singleton-variant)
-         `(s-data-field . ,#'s:s-data-field)
-         `(s-method-field . ,#'s:s-method-field)
-         `(s-op . ,#'s:s-op)
-         `(s-not . ,#'s:s-not)
-         `(s-paren . ,#'s:s-paren)
-         `(s-app . ,#'s:s-app)
-         `(s-left-app . ,#'s:s-left-app)
-         `(s-assign . ,#'s:s-assign)
-         `(s-dot . ,#'s:s-dot)
-         `(s-bracket . ,#'s:s-bracket)
-         `(s-colon . ,#'s:s-colon)
-         `(s-colon-bracket . ,#'s:s-colon-bracket)
-         `(s-for . ,#'s:s-for)
-         `(s-for-bind . ,#'s:s-for-bind)
-         `(s-extend . ,#'s:s-extend)
-         ; !!!
-         ; ...
-         )))
-|#
-
 ; Prepare a term to be shown.
 (define (adorn x)
   (define (struct-name->constr struct-name)
     ; strip off "struct:"
-    (let [[name (substring (symbol->string struct-name) 7)]]
-      (datum->syntax #f name)))
-  (cond [(string? x) (datum->syntax #f x)]
-        [(symbol? x) (datum->syntax #f x)]
+    (let [[name (string->symbol (substring (symbol->string struct-name) 7))]]
+      #`#,name))
+  (cond [(or (string? x) (symbol? x) (boolean? x) (number? x))
+         #`#,x]
         [(list? x)
          (with-syntax [[(xs* ...) (map adorn x)]]
-           #'(list xs* ...))]
+           #'(r:list xs* ...))]
         [(s-id? x)
          (with-syntax [[v* (s-id-id x)]]
-           #'(s:Var (r:quote v*) v*))]
+           #'(s:Var (r:quote v*) (r:quote v*)))] ; TODO(justin)
         [(info? x)
          (with-syntax [[loc* (adorn (info-loc x))]
                        [(tags* ...) (info-tags x)]]
@@ -145,55 +90,9 @@
          (let* [[children (vector->list (struct->vector x))]
                 [constr (struct-name->constr (car children))]
                 [subnodes (cdr children)]]
-           #`(#,constr #,(map adorn subnodes)))]
+           #`(#,constr #,@(map adorn subnodes)))]
         [else
          (error (format "stepper/adorn: Unrecognized AST node type. ~a" x))]))
-
-#|
-(define (adorn term_)
-  (match term_
-    
-    [(s-prog l imports block)
-     (with-syntax [[l* l]
-                   [(imports* ...) (map adorn imports)]
-                   [block* (adorn block)]]
-       #'(s:s-prog l* (list) block*))]
-    
-    [(s-import l s1 s2)
-     (with-syntax [[l* l] [s1* s1] [s2* s2]]
-       #'(s:s-import l* s1* s2*))]
-    
-    [(s-provide l x)
-     (with-syntax [[l* l]
-                   [x* (adorn x)]]
-       #'(s:s-provide l* x*))]
-    
-    [(s-provide-all l)
-     (with-syntax [[l* l]]
-       #'(s:s-provide-all l*))]
-    
-    [(s-block l stmts)
-     (with-syntax [[l* l]
-                   [(stmts* (map adorn stmts))]]
-       #'(s:s-block l* stmts*))]
-    
-    [(s-fun l n ns bs a doc body check)
-     (with-syntax [[l* l]
-                   [n* n]
-                   [(ns* ...) ns]
-                   [(bs* ...) (map adorn bs)]
-                   [a* a]
-                   [doc* doc]
-                   [body* (adorn body)]
-                   [check* (adorn check)]]
-       #'(s:s-fun l* n* (list ns* ...) (list bs* ...) a* doc* body* check*))]
-    
-    [(s-var l n x)
-     (with-syntax [[l* l]
-                   [n* n]
-                   [x* (adorn x)]]
-       #'(s:s-var 
- |#
 
 
 ;;; Compilation ;;;
@@ -249,11 +148,12 @@
 
 (define (compile-block l stmts env resugar)
   (define (compile-expr expr env) (compile-expr/internal expr env resugar))
-  (define (compile-stmt ast-node env)
+  (define (compile-stmt ast-node env add-frame)
     (match ast-node
       [(s-var s (s-bind _ id _) val)
         (list 
-          #`(r:define #,(discard-_ id) #,(compile-expr val env)))]
+          #`(r:define #,(discard-_ id)
+                      #,(add-frame (compile-expr val env))))]
       [(s-let s (s-bind _ id _) val)
        (define (match-id-use e)
         (match e
@@ -269,21 +169,28 @@
         [(s-lam l _ args _ doc body _)
          (define inline-binding
           (with-syntax ([(arg ...) (args-stx l args)])
-            #`(r:define #,(make-immediate-id id)
-               (p:arity-catcher (arg ...) #,(compile-expr body env)))))
+            #`(r:define
+               #,(make-immediate-id id)
+               #,(add-frame #`(p:arity-catcher
+                               (arg ...)
+                               #,(compile-expr body env))))))
          (cond
           [(or (compile-env-toplevel? env) id-used)
             (list inline-binding
                   (with-syntax ([(arg ...) (args-stx l args)]
                                 [f-id (make-immediate-id id)])
-                    #`(r:define #,(discard-_ id)
-                          (p:pλ (arg ...) #,doc (f-id arg ...)))))]
+                    #`(r:define
+                       #,(discard-_ id)
+                       #,(add-frame
+                          #`(p:pλ (arg ...) #,doc (f-id arg ...))))))]
           [else (list inline-binding)])]
         [(s-extend s (s-lam l _ args _ doc body _) fields)
          (define inline-binding
           (with-syntax ([(arg ...) (args-stx l args)])
             #`(r:define #,(make-immediate-id id)
-               (p:arity-catcher (arg ...) #,(compile-expr body env)))))
+               #,(add-frame #`(p:arity-catcher
+                               (arg ...)
+                               #,(compile-expr body env))))))
          (cond
           [(or (compile-env-toplevel? env) id-used)
             (list inline-binding
@@ -293,20 +200,31 @@
                                  (map (λ (mem) (compile-member mem env resugar))
                                       fields)])
                     #`(r:define #,(discard-_ id)
-                        (p:extend
+                     #,(add-frame
+                       #`(p:extend
                           #,(loc-stx s)
                           (p:pλ (arg ...) #,doc (f-id arg ...))
-                          (r:list field ...)))))]
+                          (r:list field ...))))))]
            [else (list inline-binding)])]
-        [_ (list #`(r:define #,(discard-_ id) #,(compile-expr val env)))])]
-      [_ (list (compile-expr ast-node env))]))
+        [_ (list #`(r:define #,(discard-_ id)
+                    #,(add-frame (compile-expr val env))))])]
+      [_ (list (add-frame (compile-expr ast-node env)))]))
+  (define (compile-stmts stmts env)
+    (if (empty? stmts)
+        (list)
+        (let* [[fr #`(s-block
+                      #,l (r:list __ #,@(map adorn (cdr stmts))))]
+               [add-frame (λ (stx) (frame resugar fr stx))]]
+          (append (compile-stmt (car stmts) env add-frame)
+                  (compile-stmts (cdr stmts) env)))))
   (define ids (block-ids stmts))
   (define fun-ids (block-fun-ids stmts))
   (define old-fun-ids (compile-env-functions-to-inline env))
   (define avoid-shadowing (set-subtract old-fun-ids (list->set ids)))
   (define new-env (compile-env (set-union avoid-shadowing fun-ids)
                                (compile-env-toplevel? env)))
-  (define stmts-stx (append* (map (curryr compile-stmt new-env) stmts)))
+  (define stmts-stx (compile-stmts stmts new-env))
+  #;(define stmts-stx (append* (map (curryr compile-stmt new-env) stmts)))
   (if (empty? stmts-stx) (list #'nothing) stmts-stx))
 
 (define (compile-member ast-node env resugar)
@@ -322,12 +240,24 @@
     [(s-str _ s) (d->stx s l)]
     [else #`(p:check-str #,(compile-expr/internal e env resugar) #,(loc-stx l))]))
 
+(define (mark l expr)
+  (with-syntax [((loc-param ...) (loc-list l))]
+    #`(r:with-continuation-mark (r:quote pyret-mark) (r:srcloc loc-param ...) #,expr)))
+
+(define (frame resugar fr expr)
+  (if resugar
+      #`(r:with-continuation-mark
+         (r:quote resugar-mark)
+         (r:lambda (__) #,fr)
+         (r:begin
+          (r:let [[result (r:let [] #,expr)]]
+                 ($emit result)
+                 result)))
+      #`#,expr))
+
 (define (compile-expr/internal ast-node env resugar)
   (let [[compile-member (λ (mem env) (compile-member mem env resugar))]]
   (define compile-expr (λ (expr env) (compile-expr/internal expr env resugar)))
-  (define (mark l expr)
-    (with-syntax [((loc-param ...) (loc-list l))]
-      #`(r:with-continuation-mark (r:quote pyret-mark) (r:srcloc loc-param ...) #,expr)))
   (define (compile-body l body new-env)
     (mark l (compile-expr body new-env)))
   (define (compile-lookup l obj field lookup-type)
@@ -373,12 +303,26 @@
      ; w/o resugar:
      (with-syntax ([(branch ...) (d->stx (map compile-if-branch c-bs) l)])
        #`(r:cond branch ... [#t #,(compile-expr else-block env)]))
-            (match c-bs
+     (match c-bs
      ; w/ resugar:
      [(list)
       (compile-expr else-block env)]
      [(cons (s-if-branch s test block) brs)
-      (with-syntax [[(v*) (generate-temporaries #'(var))]]
+      #`(r:if
+         #,(mark (empty-info 'if1)
+         #`(p:pyret-true?
+          #,(frame resugar
+             #`(s-if-else
+                #,l
+                #,(mark (empty-info 'if11)
+                   #`(r:cons (s-if-branch #,l __ #,(adorn block))
+                        (r:list #,@(map adorn brs))))
+                #,(mark (empty-info 'if12) (adorn else-block)))
+             (compile-expr test env))))
+         #,(mark (empty-info 'if2) (compile-expr block env))
+         #,(mark (empty-info 'if3)
+                 (compile-expr (s-if-else l (cdr c-bs) else-block) env)))])))]
+      #;(with-syntax [[(v*) (generate-temporaries #'(var))]]
         #`(r:let [[v* #,(annot/frame
                         (compile-expr test env)
                         #`(s-if-else
@@ -386,14 +330,14 @@
                            (r:cons (s-if-branch #,l __ #,(adorn block))
                                    (list #,@(map adorn brs)))
                            #,(adorn else-block)))]]
-                 ($emit (s-if-else
+                 #,(mark (empty-info 'if38) #`($emit (s-if-else
                          #,l
                          (r:cons (s-if-branch #,l v* #,(adorn block))
-                                 (list #,@(map adorn brs)))
-                         #,(adorn else-block)))
+                                 (r:list #,@(map adorn brs)))
+                         #,(adorn else-block))))
               (r:if (p:pyret-true? v*)
                   #,(compile-expr block env)
-                  #,(compile-expr (s-if-else l (cdr c-bs) else-block) env))))])))]
+                  #,(compile-expr (s-if-else l (cdr c-bs) else-block) env))));])))]
     
     [(s-try l try (s-bind l2 id ann) catch)
      (attach l
@@ -492,7 +436,12 @@
   (attach l
    (with-syntax ([(req ...) (map compile-hdr (filter s-import? headers))]
                  [(prov ...) (map compile-hdr (filter s-provide? headers))])
-      #`(r:begin req ... #,(compile-pyret block resugar) prov ...))))
+      #`(r:begin
+         req ...
+         #,(frame resugar
+           #`(s-prog #,l (r:list #,@(map adorn headers)) __)
+           (compile-pyret block resugar))
+         prov ...))))
 
 (define (compile-pyret ast resugar)
   (match ast

@@ -3,48 +3,65 @@
 (require "data.rkt")
 (require "../ast.rkt")
 (require "grammar.rkt")
-(require parser-tools/lex)
+(require (only-in "../runtime-defns.rkt" to-string))
+(require (except-in parser-tools/lex nothing))
 (require ragg/support)
 (require rackunit)
 
 (provide ast->string string->ast)
 
-(define (ast->string x)
-  (aterm->string (ast->aterm x)))
+(define (ast->string x [keep-srcloc? #t])
+  (aterm->string (ast->aterm x keep-srcloc?)))
 
 (define (string->ast x)
   (aterm->ast (string->aterm x)))
 
-(define-syntax-rule (node l s xs ...)
-  (tagged-node s l (list xs ...)))
-
 (define (aterm->srcloc s)
   (match s
     [(Node 'S (list src line col pos span))
-     (srcloc src line col pos span)]))
+     (srcloc src line col pos span)]
+    [(Node 'Z (list))
+     (srcloc 'no-info 1 1 1 1)]))
 
 (define (srcloc->aterm s)
   (Node 'S (reify-srcloc s)))
 
-(define (tagged-node info lbl xs)
-  (when (not (info? info))
-    (error (format "bad info arg: ~a ~a ~a" info lbl xs)))
-  (let [[srcloc (srcloc->aterm (info-loc info))]
-        [tags (info-tags info)]]
-    (if (empty? tags)
-        (Node lbl (cons srcloc xs))
-        (Tagged tags (Node lbl (cons srcloc xs))))))
 
-
-(define (ast->aterm ast)
-  (define (rec x) (ast->aterm x))
-  (define (recs xs) (List (map ast->aterm xs)))
-  (define (show-name x) (symbol->string x))
+(define (ast->aterm ast keep-srcloc)
+  (define-syntax-rule (node l s xs ...)
+    (tagged-node s l (list xs ...)))
+  (define (tagged-node info lbl xs)
+    (when (not (info? info))
+      (error (format "bad info arg: ~a ~a ~a" info lbl xs)))
+    (let [[srcloc (if keep-srcloc
+                      (srcloc->aterm (info-loc info))
+                      (Node 'Z (list)))]
+          [tags (info-tags info)]]
+      (if (empty? tags)
+          (Node lbl (cons srcloc xs))
+          (Tagged tags (Node lbl (cons srcloc xs))))))
+  (define (rec x) (ast->aterm x keep-srcloc))
+  (define (recs xs) (List (map rec xs)))
+  (define (show-name x)
+    (if (symbol? x)
+        (symbol->string x)
+        (format "[?~a?]" x))
+    #;(symbol->string x)) ;TODO(justin)
   (define (show-number x) (number->string x))
-  (define (stmt s x) (if (s-expr? x) (Node 'Expr (list (rec x))) (rec x)))
+  (define (stmt s x) (if (not (s-stmt? x))
+                         (Node 'Expr (list (rec x))) (rec x)))
   (define (stmts s xs) (map (λ (x) (stmt s x)) xs))
   
   (match ast
+    [(? Func? x)         (ast->aterm (Func-term x))]
+    [(? Var? x)          (symbol->string (Var-name x))]
+    #;[(? Var? x)          (let* [[name (Var-name x)]
+                                [term (ast->aterm (Var-value x))]
+                                [u ((unexpand) term "Expr")]] ; TODO: why does (unexpand) fail with EOF here??
+                           (if (or (and HIDE_UNDEFINED (undefined? u))
+                                   (CouldNotUnexpand? u))
+                               name
+                               u))]
     ; Values
     [(s-list s xs)       (node 'List s (recs xs))]
     [(s-id s n)          (node 'Id s (show-name n))]
@@ -124,7 +141,9 @@
     [(s-colon-bracket s x y) (node 'ColonBracket s (rec x) (rec y))]
     [(s-for s x bs a b)      (node 'For s (rec x) (recs bs) (rec a) (rec b))]
     [(s-for-bind s b x)      (node 'ForBind s (rec b) (rec x))]
-    [(s-extend s x ms)       (node 'Extend s (rec x) (recs ms))]))
+    [(s-extend s x ms)       (node 'Extend s (rec x) (recs ms))]
+    ; Runtime values
+    [x                       (Node 'Value (list (to-string x)))]))
 
 
 (define (aterm->ast x [os (list)])
@@ -138,6 +157,7 @@
   (match x
     [(Tagged os t)
      (aterm->ast t os)]
+    [(Node 'Value (list x))        (Val x)]
     ; Values
     [(Node 'List (list s xs))      (s-list (syn s) (recs xs))]
     [(Node 'Id (list s n))         (s-id (syn s) (read-name n))]

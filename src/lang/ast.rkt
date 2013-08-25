@@ -24,6 +24,9 @@ these metadata purposes.
 (define (empty-info phantom-filename)
   (info (srcloc phantom-filename #f #f #f #f) (list)))
 
+; Wraps runtime values (which belong in the ast only during resugaring)
+(define-struct Val (value) #:transparent)
+
 (define (src->module-name e)
   (cond
     [(symbol? e) e]
@@ -76,6 +79,12 @@ these metadata purposes.
 (struct s-bind (syntax id ann) #:transparent)
 
 ;; A Stmt is a (U s-fun s-var s-let s-if s-try s-data s-import Expr)
+
+(define (s-stmt? x)
+  (let [[stmt-types (list
+     s-fun? s-var? s-let? s-try? s-if? s-if-else? s-cases?
+     s-cases-else? s-data?)]]
+    (ormap (λ (pred) (pred x)) stmt-types)))
 
 ;; s-fun : srcloc Symbol (Listof Symbol) (Listof s-bind) Ann String s-block s-block
 (struct s-fun (syntax name params args ann doc body check) #:transparent)
@@ -154,12 +163,14 @@ these metadata purposes.
 ;;    s-colon s-colon-bracket s-lam
 ;;    s-block s-method))
 
+#|
 (define (s-expr? x)
   (let [[expr-types (list
      s-op? s-not? s-app? s-left-app? s-assign? s-dot?
      s-bracket? s-colon? s-colon-bracket? s-for? s-for-bind? s-extend?
-     s-list? s-id? s-num? s-bool? s-str? s-paren?)]]
+     s-list? s-id? s-num? s-bool? s-str? s-paren? Val?)]]
     (ormap (λ (pred) (pred x)) expr-types)))
+|#
 
 ;; s-lam : srcloc (Listof Symbol) (Listof s-bind) Ann String s-block s-block -> s-lam
 (struct s-lam (syntax typarams args ann doc body check) #:transparent)

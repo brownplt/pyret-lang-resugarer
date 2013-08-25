@@ -1,7 +1,5 @@
 #lang racket
 
-(require "../pretty.rkt")
-
 (provide (all-defined-out))
 
 #| Tag ::= MacHead(macro-name, case-number, origin-term)

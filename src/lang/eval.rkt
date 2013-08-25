@@ -49,7 +49,8 @@
   (define well-formed-stx (well-formed parsed-stx))
   (define desugared (desugar well-formed-stx))
   (define compiled (compile (contract-check-pyret desugared) resugar))
-  ;(when resugar (display (format "\n~a\n\n" (syntax->datum compiled))))
+  ; TODO
+  ;(when resugar (display (format "EVAL:\n~a\n\n" (pretty-write (syntax->datum compiled)))))
   (strip-context compiled))
 
 (define (repl-eval-pyret src in)

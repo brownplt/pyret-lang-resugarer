@@ -7,16 +7,19 @@
 ; debugging:
 (require "../desugar.rkt")
 
-(set-debug-desugar! #t)
+(set-debug-desugar! #f)
+(set-debug-communication! #t)
 
 (provide (rename-out
           [with-resugaring resugarer:with-resugaring]
           [desugar resugarer:desugar]
-          [emit resugarer:emit])
+          [emit resugarer:emit]
+          [reconstruct-stack resugarer-test:reconstruct-stack])
          (prefix-out s:
            (combine-out
             (struct-out srcloc)
             (struct-out info)
+            (struct-out Val)
             (struct-out Var)
             (struct-out Func)
             (struct-out Cont))))
@@ -57,42 +60,53 @@
              (send-command (format "desugar ~a ~a\n" sort (ast->string t)) out)
              (if DEBUG_DESUGAR
                  (let [[response (receive-response in err)]]
-                   (display (format "desugaring...\n  --std-->\n~a\n  --new-->\n~a\n\n" (pretty (desugar-pyret t)) (pretty response)))
+                   (display (format "desugaring...\n  --std-->\n~a\n f --new-->\n~a\n\n" (pretty (desugar-pyret t)) (pretty response)))
                    response)
              (receive-response in err)))]
-           [unexpand (λ (t sort)
-             (send-command (format "resugar ~a ~a\n" sort (ast->string t)) out)
+           [unexpand (λ (t sort [keep-srclocs? #t])
+             (send-command (format "resugar ~a ~a\n" sort (ast->string t keep-srclocs?)) out)
              (receive-response in err))]]
         (let [[result (begin expr exprs ...)]]
           (subprocess-kill resugarer #t)
           result))))))
 
-(set-debug-communication! #t)
-
 (define (desugar dir sort ast)
   (with-resugaring dir ((expand) ast sort)))
 
-(define (reconstruct-stack x stk)
-  (if (empty? stk)
-      x
-      (reconstruct-stack ((car stk) x) (cdr stk))))
+(define (reconstruct-stack x)
+  (let [[stk (continuation-mark-set->list
+              (current-continuation-marks)
+              'resugar-mark)]]
+    (define (rec x stk)
+      (if (empty? stk)
+          x
+          (rec ((car stk) x) (cdr stk))))
+    (rec x stk)))
 
 (define (display-skip t)
   (when DEBUG_STEPS
     (display (format "SKIP: ~a\n\n" (pretty t)))))
 
 (define (display-step t)
-  (display (format "~a\n" (pretty t)))
+  (display (format "\n~a\n" (pretty t)))
   (when DEBUG_STEPS (newline)))
+    
+
+(define (sort t)
+  (cond [(s-prog? t) "Prog"]
+        [(s-block? t) "Block"]
+        [else "Expr"]))
 
 (define (emit x [id #f])
+  (display (format "EMIT: ~a\n\n" (reconstruct-stack x)))
   (if id
       (let* [[name (Var-name x)]
-             [term (value->term (Var-value x))]
-             [u ((unexpand) term)]]
+             [t (Var-value x)]
+             [u ((unexpand) t (sort t) #f)]]
         (if (CouldNotUnexpand? u) (emit x) (void)))
-      (let* [[t (value->term (reconstruct-stack x))]
-             [u ((unexpand) t)]]
+      (let* [[t (reconstruct-stack x)]
+             [u ((unexpand) t (sort t) #f)]]
+        #;(display-step t)
         (if (CouldNotUnexpand? u)
             (display-skip t)
             (display-step u)))))
@@ -105,7 +119,7 @@
         [(Var? x)
          (let* [[name (Var-name x)]
                 [term (value->term (Var-value x))]
-                [u    ((unexpand) term)]]
+                [u    ((unexpand) term "Prog")]]
            (if DEBUG_VARS
                (TermList (list) (list name ':= term))
                (if (or (and HIDE_UNDEFINED (undefined? u))

@@ -5,7 +5,9 @@
   racket/string
   racket/function
   racket/list
-  "ast.rkt")
+  "ast.rkt"
+  "stepper/data.rkt"
+  (only-in "runtime-defns.rkt" to-string))
 
 (provide
   pretty
@@ -55,6 +57,12 @@
                   (indented (prettier block)))))
   
   (match ast
+    
+    [(? Val? ast) (to-string (Val-value ast))]
+    
+    [(? Var? ast) (pretty (Var-value ast))] ;TODO
+    
+    [(? Func? ast) (pretty (Func-term ast))]
     
     [(? string? ast) ast]
     
@@ -187,7 +195,9 @@
     [(s-str _ s) (format "\"~a\"" s)]
     [(s-id _ id) (symbol->string id)]
 
-    [(s-paren _ e) (format "(~a)" (pretty e))]))
+    [(s-paren _ e) (format "(~a)" (pretty e))]
+    
+    [val (to-string val)]))
   
 #|
   (define (pretty-member ast)

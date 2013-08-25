@@ -15,9 +15,11 @@
   racket/match
   racket/pretty
   racket/runtime-path
-  "lang/reader.rkt"
-  "lang/ast.rkt"
+  ;"lang/reader.rkt"
+  ;"lang/ast.rkt"
   racket/syntax)
+
+(provide (all-defined-out))
 
 (define-runtime-path pyret-lang-racket "lang/pyret-lang-racket.rkt")
 (module test-shell "lang/pyret-lang-racket.rkt"
@@ -82,6 +84,7 @@
        (display "Uncaught Racket-land error that Pyret does not understand yet:\n")
        (print-pyret-locs cms)
        (display p)
+       (newline)
        (display (continuation-mark-set->context cms))
        (display "\n\nPlease copy/paste this exception in an email to joe@cs.brown.edu.\n")])]
     ))

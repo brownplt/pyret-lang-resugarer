@@ -2,7 +2,9 @@ core
   values
 
 	S : String * Int * Int * Int * Int -> S;
+    Z : S;
 	Expr : Expr -> Stmt;
+    Value : String -> Expr;
 
 	List : S * [Expr] -> Expr;
 	Id : S * String -> Expr;
@@ -95,7 +97,9 @@ surface
   values
 
     S : String * Int * Int * Int * Int -> S;
+    Z : S;
 	Expr : Expr -> Stmt;
+    Value : String -> Expr;
 
 	List : S * [Expr] -> Expr;
 	Id : S * String -> Expr;
