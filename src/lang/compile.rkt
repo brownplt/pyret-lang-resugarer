@@ -70,8 +70,10 @@
     ; strip off "struct:"
     (let [[name (string->symbol (substring (symbol->string struct-name) 7))]]
       #`#,name))
-  (cond [(or (string? x) (symbol? x) (boolean? x) (number? x))
+  (cond [(or (string? x) (boolean? x) (number? x))
          #`#,x]
+        [(symbol? x)
+         #'(r:quote x)]
         [(list? x)
          (with-syntax [[(xs* ...) (map adorn x)]]
            #'(r:list xs* ...))]

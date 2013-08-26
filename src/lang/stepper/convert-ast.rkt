@@ -53,11 +53,12 @@
   (define (stmts s xs) (map (λ (x) (stmt s x)) xs))
   
   (match ast
-    [(? Func? x)         (ast->aterm (Func-term x))]
-    [(? Var? x)          (symbol->string (Var-name x))]
+    [(? Func? x)         (rec (Func-term x))]
+    ; TODO(justin)
+    [(? Var? x)          (rec (Var-value x))]
     #;[(? Var? x)          (let* [[name (Var-name x)]
-                                [term (ast->aterm (Var-value x))]
-                                [u ((unexpand) term "Expr")]] ; TODO: why does (unexpand) fail with EOF here??
+                                [term (rec (Var-value x))]
+                                [u term #;((unexpand) term "Expr")]] ; TODO: why does (unexpand) fail with EOF here??
                            (if (or (and HIDE_UNDEFINED (undefined? u))
                                    (CouldNotUnexpand? u))
                                name

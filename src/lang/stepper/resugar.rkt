@@ -39,7 +39,7 @@
   (let [[response (read-line in)]]
     (when DEBUG_COMMUNICATION (display response) (newline) (newline))
     (cond [(eof-object? response)
-           (display (read-port err)) (newline)
+           (display (format "|~a|" (read-port err))) (newline)
            (error "Received EOF")]
           [(strip-prefix "success: " response)
            => (λ (t) (string->ast t))]
