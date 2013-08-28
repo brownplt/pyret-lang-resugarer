@@ -20,7 +20,7 @@
 (define (compile-stepping-prelude stx resugar)
   (if resugar
       (with-syntax [[code* stx]]
-        #'(resugarer:with-resugaring "src/lang/"
+        #'(resugarer:with-resugaring "src/lang/stepper"
            (r:let []
             (r:define $emit (r:lambda (z)
                (resugarer:emit z)))

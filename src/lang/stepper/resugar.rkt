@@ -9,6 +9,7 @@
 
 (set-debug-desugar! #f)
 (set-debug-communication! #t)
+(set-debug-steps! #t)
 
 (provide (rename-out
           [with-resugaring resugarer:with-resugaring]
@@ -55,6 +56,8 @@
           [grammar-file (string-append dir "/pyret.grammar")]]
     (let-values [[(resugarer in out err)
                   (subprocess #f #f #f cmd-file grammar-file)]]
+      (display (format "with-resugaring: opening... ~a ~a\n\n"
+                       cmd-file grammar-file))
       (parameterize
           [[expand (λ (t sort)
              (send-command (format "desugar ~a ~a\n" sort (ast->string t)) out)
@@ -98,7 +101,6 @@
         [else "Expr"]))
 
 (define (emit x [id #f])
-  (display (format "EMIT: ~a\n\n" (reconstruct-stack x)))
   (if id
       (let* [[name (Var-name x)]
              [t (Var-value x)]
