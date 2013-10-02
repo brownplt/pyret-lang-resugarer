@@ -64,7 +64,7 @@
     
     [(? Func? ast) (pretty (Func-term ast))]
     
-    [(? string? ast) ast]
+    [(? string? ast) (format "~v" ast)]
     
     [(? symbol? ast) (symbol->string ast)]
     

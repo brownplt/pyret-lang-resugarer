@@ -23,6 +23,7 @@
     (display "\n\n")))
   
 (set-debug-desugar! #f)
+(set-debug-communication! #f)
 
 (test-desugar "tests/op.arr")
 (test-desugar "tests/list.arr")

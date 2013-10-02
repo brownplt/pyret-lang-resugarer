@@ -3,7 +3,7 @@
 (require "data.rkt")
 (require "../ast.rkt")
 (require "grammar.rkt")
-(require (only-in "../runtime-defns.rkt" to-string))
+(require (only-in "../runtime-defns.rkt" print-pyret))
 (require (except-in parser-tools/lex nothing))
 (require ragg/support)
 (require rackunit)
@@ -144,7 +144,7 @@
     [(s-for-bind s b x)      (node 'ForBind s (rec b) (rec x))]
     [(s-extend s x ms)       (node 'Extend s (rec x) (recs ms))]
     ; Runtime values
-    [x                       (Node 'Value (list (to-string x)))]))
+    [x                       (Node 'Value (list (print-pyret x)))]))
 
 
 (define (aterm->ast x [os (list)])
