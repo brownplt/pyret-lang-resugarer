@@ -15,7 +15,7 @@
   "compile-helpers/find.rkt"
   "compile-helpers/lift-constants.rkt")
   
-  
+
 ;;; Keeping track of the stack ;;;
 
 (define (compile-stepping-prelude stx resugar)
@@ -42,6 +42,25 @@
 (define (make-frame body_)
   (with-syntax [[body* body_]]
     #'(r:lambda (__) body*)))
+
+(define (frame resugar fr expr)
+  (if resugar
+      #`(r:with-continuation-mark
+         (r:quote resugar-mark)
+         (r:lambda (__) #,fr)
+         (r:begin
+          (r:let [[result (r:let [] #,expr)]]
+                 ($emit result)
+                 result)))
+      #`#,expr))
+
+(define (ephemeral-frame resugar fr expr)
+    (if resugar
+      #`(r:with-continuation-mark
+         (r:quote resugar-mark)
+         (r:lambda (__) #,fr)
+         #,expr)
+      #`#,expr))
 
 #|
 ; Annotate function argument expressions
@@ -221,7 +240,10 @@
         (list)
         (let* [[fr #`(s-block
                       #,l (r:list __ #,@(map adorn (cdr stmts))))]
-               [add-frame (λ (stx) (frame resugar fr stx))]]
+               [add-frame (λ (stx)
+                 (if (empty? (cdr stmts))
+                     (ephemeral-frame resugar fr stx)
+                     (frame resugar fr stx)))]]
           (append (compile-stmt (car stmts) env add-frame)
                   (compile-stmts (cdr stmts) env)))))
   (define ids (block-ids stmts))
@@ -232,7 +254,9 @@
                                (compile-env-toplevel? env)))
   (define stmts-stx (compile-stmts stmts new-env))
   #;(define stmts-stx (append* (map (curryr compile-stmt new-env) stmts)))
-  (if (empty? stmts-stx) (list #'nothing) stmts-stx))
+  (if (empty? stmts-stx)
+      (list #'nothing) ;!!!
+      stmts-stx))
 
 (define (compile-member ast-node env resugar)
   (match ast-node
@@ -251,21 +275,10 @@
   (with-syntax [((loc-param ...) (loc-list l))]
     #`(r:with-continuation-mark (r:quote pyret-mark) (r:srcloc loc-param ...) #,expr)))
 
-(define (frame resugar fr expr)
-  (if resugar
-      #`(r:with-continuation-mark
-         (r:quote resugar-mark)
-         (r:lambda (__) #,fr)
-         (r:begin
-          (r:let [[result (r:let [] #,expr)]]
-                 ($emit result)
-                 result)))
-      #`#,expr))
-
 (define (compile-expr/internal ast-node env resugar)
   (let [[compile-member (λ (mem env) (compile-member mem env resugar))]]
   (define compile-expr (λ (expr env)
-       (display (format "Compiling: ~a\n" (pretty expr)))
+       ;(display (format "Compiling: ~a\n" (pretty expr)))
        (compile-expr/internal expr env resugar)))
   (define (compile-body l body new-env)
     (mark l (compile-expr body new-env)))

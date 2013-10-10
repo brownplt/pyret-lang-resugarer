@@ -8,9 +8,11 @@
 (require ragg/support)
 (require rackunit)
 
-(provide ast->string string->ast)
+(provide ast->string string->ast set-disable-srclocs!)
 
-(define (ast->string x [keep-srcloc? #f])
+(define-setting DISABLE_SRCLOCS set-disable-srclocs! #f)
+
+(define (ast->string x [keep-srcloc? (not DISABLE_SRCLOCS)])
   (aterm->string (ast->aterm x keep-srcloc?)))
 
 (define (string->ast x)

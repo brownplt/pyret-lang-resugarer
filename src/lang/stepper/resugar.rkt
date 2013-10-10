@@ -8,8 +8,9 @@
 (require "../desugar.rkt")
 
 (set-debug-desugar! #f)
-(set-debug-communication! #t)
+(set-debug-communication! #f)
 (set-debug-steps! #t)
+(set-disable-srclocs! #f)
 
 (provide (rename-out
           [with-resugaring resugarer:with-resugaring]
@@ -23,7 +24,10 @@
             (struct-out Val)
             (struct-out Var)
             (struct-out Func)
-            (struct-out Cont))))
+            (struct-out Cont)))
+         set-debug-desugar!
+         set-debug-communication!
+         set-debug-steps!)
 
 (define (send-command cmd out)
   (when DEBUG_COMMUNICATION (display cmd) (newline))
@@ -95,7 +99,7 @@
 
 (define (sort t)
   (cond [(s-prog? t) "Prog"]
-        [(s-block? t) "Block"]
+        [(s-block? t) "Expr"]
         [else "Expr"]))
 
 (define (emit x [id #f])

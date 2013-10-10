@@ -13,8 +13,8 @@ core
 	False : S -> Expr;
 	Str : S * String -> Expr;
 
-	Lam : S * [String] * [Bind] * Ann * String * Block * Block -> Expr;
-	Method : S * [Bind] * Ann * String * Block * Block -> Expr;
+	Lam : S * [String] * [Bind] * Ann * String * Expr * Expr -> Expr;
+	Method : S * [Bind] * Ann * String * Expr * Expr -> Expr;
 
 	Obj : S * [Member] -> Expr;
 
@@ -37,7 +37,7 @@ core
 
   constructors
 
-    Prog : S * [Header] * Block -> Prog;
+    Prog : S * [Header] * Expr -> Prog;
 
 
     # Headers #
@@ -50,26 +50,26 @@ core
 
     # Statements #
 
-	Block : S * [Stmt] -> Block;
+	Block : S * [Stmt] -> Expr;
 
-	Fun : S * String * [String] * [Bind] * Ann * String * Block * Block -> Stmt;
+	Fun : S * String * [String] * [Bind] * Ann * String * Expr * Expr -> Stmt;
 	Var : S * Bind * Expr -> Stmt;
 	Let : S * Bind * Expr -> Stmt;
 	Try : S * Expr * Bind * Expr -> Stmt;
 	
-	IfElse : S * [IfBranch] * Block -> Stmt;
-	IfBranch : S * Expr * Block -> IfBranch;
+	IfElse : S * [IfBranch] * Expr -> Stmt;
+	IfBranch : S * Expr * Expr -> IfBranch;
 	
 	Cases : S * Expr * Expr * [CasesBranch] -> Stmt;
-	CasesElse : S * Expr * Expr * [CasesBranch] * Block -> Stmt;
-	CasesBranch : S * String * [Bind] * Block -> CasesBranch;
+	CasesElse : S * Expr * Expr * [CasesBranch] * Expr -> Stmt;
+	CasesBranch : S * String * [Bind] * Expr -> CasesBranch;
 
-	Data : S * String * [String] * [Variant] * [Member] * Block -> Stmt;
+	Data : S * String * [String] * [Variant] * [Member] * Expr -> Stmt;
 	Variant : S * String * [Bind] * [Member] -> Variant;
 	SingletonVariant : S * String * [Member] -> Variant;
 
 	DataField : S * Expr * Expr -> Member;
-	MethodField : S * Expr * [Bind] * Ann * String * Block * Block -> Member;
+	MethodField : S * Expr * [Bind] * Ann * String * Expr * Expr -> Member;
 
 
     # Expressions #
@@ -84,7 +84,7 @@ core
 	Colon : S * Expr * String -> Expr;
 	ColonBracket : S * Expr * Expr -> Expr;
 
-	For : S * Expr * [ForBind] * Ann * Block -> Expr;
+	For : S * Expr * [ForBind] * Ann * Expr -> Expr;
 	ForBind : S * Bind * Expr -> ForBind;
 
 	Extend : S * Expr * [Member] -> Expr;
@@ -108,8 +108,8 @@ surface
 	False : S -> Expr;
 	Str : S * String -> Expr;
 
-	Lam : S * [String] * [Bind] * Ann * String * Block * Block -> Expr;
-	Method : S * [Bind] * Ann * String * Block * Block -> Expr;
+	Lam : S * [String] * [Bind] * Ann * String * Expr * Expr -> Expr;
+	Method : S * [Bind] * Ann * String * Expr * Expr -> Expr;
 
 	Obj : S * [Member] -> Expr;
 
@@ -139,7 +139,7 @@ surface
 
   constructors
 
-    Prog : S * [Header] * Block -> Prog;
+    Prog : S * [Header] * Expr -> Prog;
 
 
     # Headers #
@@ -152,28 +152,28 @@ surface
 
     # Statements #
 
-	Block : S * [Stmt] -> Block;
+	Block : S * [Stmt] -> Expr;
 
-	Fun : S * String * [String] * [Bind] * Ann * String * Block * Block -> Stmt;
+	Fun : S * String * [String] * [Bind] * Ann * String * Expr * Expr -> Stmt;
 	Var : S * Bind * Expr -> Stmt;
 	Let : S * Bind * Expr -> Stmt;
-	When : S * Expr * Block -> Stmt;
+	When : S * Expr * Expr -> Stmt;
 	Try : S * Expr * Bind * Expr -> Stmt;
 	
 	If : S * [IfBranch] -> Stmt;
-	IfElse : S * [IfBranch] * Block -> Stmt;
-	IfBranch : S * Expr * Block -> IfBranch;
+	IfElse : S * [IfBranch] * Expr -> Stmt;
+	IfBranch : S * Expr * Expr -> IfBranch;
 	
 	Cases : S * Expr * Expr * [CasesBranch] -> Stmt;
-	CasesElse : S * Expr * Expr * [CasesBranch] * Block -> Stmt;
-	CasesBranch : S * String * [Bind] * Block -> CasesBranch;
+	CasesElse : S * Expr * Expr * [CasesBranch] * Expr -> Stmt;
+	CasesBranch : S * String * [Bind] * Expr -> CasesBranch;
 
-	Data : S * String * [String] * [Variant] * [Member] * Block -> Stmt;
+	Data : S * String * [String] * [Variant] * [Member] * Expr -> Stmt;
 	Variant : S * String * [Bind] * [Member] -> Variant;
 	SingletonVariant : S * String * [Member] -> Variant;
 
 	DataField : S * Expr * Expr -> Member;
-	MethodField : S * Expr * [Bind] * Ann * String * Block * Block -> Member;
+	MethodField : S * Expr * [Bind] * Ann * String * Expr * Expr -> Member;
 
 
     # Expressions #
@@ -192,7 +192,7 @@ surface
 	Colon : S * Expr * String -> Expr;
 	ColonBracket : S * Expr * Expr -> Expr;
 
-	For : S * Expr * [ForBind] * Ann * Block -> Expr;
+	For : S * Expr * [ForBind] * Ann * Expr -> Expr;
 	ForBind : S * Bind * Expr -> ForBind;
 
 	Extend : S * Expr * [Member] -> Expr;
@@ -203,7 +203,7 @@ rules
   If(s, branches) ->
     IfElse(s, branches, Block(s,
       [Expr(App(s, Id(s, "raise"),
-	         [Str(s, "if: no tests matched")]))]));
+	         [Str(s, "if: no tests matchedq")]))]));
   Not(s, e) -> App(s, Bracket(s, e, Str(s, "_not")), []);
   # Opis: uses pretty
   Op(s, "is", x, y) ->
