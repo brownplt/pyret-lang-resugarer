@@ -3,14 +3,14 @@
 (require "data.rkt")
 (require "../ast.rkt")
 (require "grammar.rkt")
-(require (only-in "../runtime-defns.rkt" print-pyret))
+(require (only-in "../runtime-defns.rkt" to-string))
 (require (except-in parser-tools/lex nothing))
 (require ragg/support)
 (require rackunit)
 
 (provide ast->string string->ast)
 
-(define (ast->string x [keep-srcloc? #t])
+(define (ast->string x [keep-srcloc? #f])
   (aterm->string (ast->aterm x keep-srcloc?)))
 
 (define (string->ast x)
@@ -26,6 +26,9 @@
 (define (srcloc->aterm s)
   (Node 'S (reify-srcloc s)))
 
+
+(define (show-pyret-val x)
+  (to-string x))
 
 (define (ast->aterm ast keep-srcloc)
   (define-syntax-rule (node l s xs ...)
@@ -144,7 +147,7 @@
     [(s-for-bind s b x)      (node 'ForBind s (rec b) (rec x))]
     [(s-extend s x ms)       (node 'Extend s (rec x) (recs ms))]
     ; Runtime values
-    [x                       (Node 'Value (list (print-pyret x)))]))
+    [x                       (Node 'Value (list (show-pyret-val x)))]))
 
 
 (define (aterm->ast x [os (list)])

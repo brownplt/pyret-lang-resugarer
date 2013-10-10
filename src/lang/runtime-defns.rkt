@@ -675,7 +675,6 @@ And the object was:
          ("_not" . ,(mk-bool-1 not 'not))))))
   meta-bool-store)
 
-;; print-pyret : Value -> String
 (define (print-pyret val)
   (when (not (equal? val nothing))
     (match val

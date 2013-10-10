@@ -56,8 +56,6 @@
           [grammar-file (string-append dir "/pyret.grammar")]]
     (let-values [[(resugarer in out err)
                   (subprocess #f #f #f cmd-file grammar-file)]]
-      (display (format "with-resugaring: opening... ~a ~a\n\n"
-                       cmd-file grammar-file))
       (parameterize
           [[expand (λ (t sort)
              (send-command (format "desugar ~a ~a\n" sort (ast->string t)) out)

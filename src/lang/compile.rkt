@@ -124,6 +124,9 @@
 
 (struct compile-env (functions-to-inline toplevel?) #:transparent)
 
+(define (get-functions-to-inline env resugar)
+  (compile-env-functions-to-inline env))
+
 (define (d->stx stx loc) (datum->syntax #f stx (loc-list loc)))
 
 (define (attach loc stx)
@@ -221,7 +224,7 @@
                   (compile-stmts (cdr stmts) env)))))
   (define ids (block-ids stmts))
   (define fun-ids (block-fun-ids stmts))
-  (define old-fun-ids (compile-env-functions-to-inline env))
+  (define old-fun-ids (get-functions-to-inline env resugar))
   (define avoid-shadowing (set-subtract old-fun-ids (list->set ids)))
   (define new-env (compile-env (set-union avoid-shadowing fun-ids)
                                (compile-env-toplevel? env)))
@@ -270,7 +273,7 @@
   (match ast-node
     
     [(s-block l stmts)
-     (define new-env (compile-env (compile-env-functions-to-inline env) #f))
+     (define new-env (compile-env (get-functions-to-inline env resugar) #f))
      (with-syntax ([(stmt ...) (compile-block l stmts new-env resugar)])
        (attach l #'(r:let () stmt ...)))]
 
@@ -280,14 +283,14 @@
     [(s-str l s) #`(p:mk-str #,(d->stx s l))]
 
     [(s-lam l params args ann doc body _)
-     (define new-env (compile-env (compile-env-functions-to-inline env) #f))
+     (define new-env (compile-env (get-functions-to-inline env resugar) #f))
      (attach l
        (with-syntax ([(arg ...) (args-stx l args)]
                      [body-stx (compile-body l body new-env)])
          #`(p:pλ (arg ...) #,doc body-stx)))]
     
     [(s-method l args ann doc body _)
-     (define new-env (compile-env (compile-env-functions-to-inline env) #f))
+     (define new-env (compile-env (get-functions-to-inline env resugar) #f))
      (attach l
        (with-syntax ([(arg ...) (args-stx l args)]
                      [body-stx (compile-body l body new-env)])
@@ -311,35 +314,17 @@
       (compile-expr else-block env)]
      [(cons (s-if-branch s test block) brs)
       #`(r:if
-         #,(mark (empty-info 'if1)
-         #`(p:pyret-true?
+         (p:pyret-true?
           #,(frame resugar
              #`(s-if-else
                 #,l
-                #,(mark (empty-info 'if11)
-                   #`(r:cons (s-if-branch #,l __ #,(adorn block))
-                        (r:list #,@(map adorn brs))))
-                #,(mark (empty-info 'if12) (adorn else-block)))
-             (compile-expr test env))))
-         #,(mark (empty-info 'if2) (compile-expr block env))
-         #,(mark (empty-info 'if3)
-                 (compile-expr (s-if-else l (cdr c-bs) else-block) env)))])))]
-      #;(with-syntax [[(v*) (generate-temporaries #'(var))]]
-        #`(r:let [[v* #,(annot/frame
-                        (compile-expr test env)
-                        #`(s-if-else
-                           #,l
-                           (r:cons (s-if-branch #,l __ #,(adorn block))
-                                   (list #,@(map adorn brs)))
-                           #,(adorn else-block)))]]
-                 #,(mark (empty-info 'if38) #`($emit (s-if-else
-                         #,l
-                         (r:cons (s-if-branch #,l v* #,(adorn block))
-                                 (r:list #,@(map adorn brs)))
-                         #,(adorn else-block))))
-              (r:if (p:pyret-true? v*)
-                  #,(compile-expr block env)
-                  #,(compile-expr (s-if-else l (cdr c-bs) else-block) env))));])))]
+                (r:cons (s-if-branch #,s __ #,(adorn block))
+                        (r:list #,@(map adorn brs)))
+                #,(adorn else-block))
+             (compile-expr test env)))
+         #,(frame resugar #`(r:list "if*" __) ; TODO (temporary)
+                  (compile-expr block env))
+         #,(compile-expr (s-if-else l brs else-block) env))])))]
     
     [(s-try l try (s-bind l2 id ann) catch)
      (attach l
@@ -378,7 +363,7 @@
     [(s-app l fun args)
      (define (compile-fun-expr fun)
       (match fun
-        [(s-id l2 (? (λ (s) (set-member? (compile-env-functions-to-inline env) s)) id))
+        [(s-id l2 (? (λ (s) (set-member? (get-functions-to-inline env resugar) s)) id))
          (make-immediate-id id)]
         [(s-lam l _ args _ doc body _)
          (with-syntax ([(arg ...) (args-stx l args)])
@@ -451,13 +436,17 @@
      (compile-stepping-prelude (compile-prog l headers block resugar)
                                resugar)]
     [(s-block l stmts)
-     (match-define (s-block l2 new-stmts) (lift-constants ast))
+     (match-define (s-block l2 new-stmts)
+       (if resugar (s-block l stmts)
+                   (lift-constants ast)))
      (with-syntax ([(stmt ...) (compile-block l2 new-stmts (compile-env (set) #t) resugar)])
        (attach l #'(r:begin stmt ...)))]
     [else (error (format "Didn't match a case in compile-pyret: ~a" ast))]))
 
 (define (compile-expr pre-ast resugar)
-  (define ast (lift-constants pre-ast))
+  (define ast
+    (if resugar pre-ast
+                (lift-constants pre-ast)))
   (compile-expr/internal ast (compile-env (set) #f) resugar))
 
 (define (discard-_ name)

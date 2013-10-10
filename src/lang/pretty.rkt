@@ -56,9 +56,12 @@
         (newlines "check:"
                   (indented (prettier block)))))
   
+  (define (show-value v)
+    (to-string v))
+  
   (match ast
     
-    [(? Val? ast) (to-string (Val-value ast))]
+    [(? Val? ast) (show-value (Val-value ast))]
     
     [(? Var? ast) (pretty (Var-value ast))] ;TODO
     
@@ -197,7 +200,7 @@
 
     [(s-paren _ e) (format "(~a)" (pretty e))]
     
-    [val (to-string val)]))
+    [val (show-value val)]))
   
 #|
   (define (pretty-member ast)
