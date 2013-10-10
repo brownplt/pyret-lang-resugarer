@@ -11,6 +11,7 @@
   racket/syntax
   "ast.rkt"
   "runtime.rkt"
+  "pretty.rkt"
   "compile-helpers/find.rkt"
   "compile-helpers/lift-constants.rkt")
   
@@ -65,6 +66,7 @@
   (error "annot/call NYI"))
 
 ; Prepare a term to be shown.
+; Pyret-ast-with-values -> Racket-code-to-reconstruct-said-ast
 (define (adorn x)
   (define (struct-name->constr struct-name)
     ; strip off "struct:"
@@ -73,13 +75,13 @@
   (cond [(or (string? x) (boolean? x) (number? x))
          #`#,x]
         [(symbol? x)
-         #'(r:quote x)]
+         #`(r:quote #,x)]
         [(list? x)
          (with-syntax [[(xs* ...) (map adorn x)]]
            #'(r:list xs* ...))]
-        [(s-id? x)
-         (with-syntax [[v* (s-id-id x)]]
-           #'(s:Var (r:quote v*) (r:quote v*)))] ; TODO(justin)
+;        [(s-id? x)
+;         (with-syntax [[v* (s-id-id x)]]
+;           #'(s:Var (r:quote v*) (r:quote v*)))] ; TODO(justin)
         [(info? x)
          (with-syntax [[loc* (adorn (info-loc x))]
                        [(tags* ...) (info-tags x)]]
@@ -262,7 +264,9 @@
 
 (define (compile-expr/internal ast-node env resugar)
   (let [[compile-member (λ (mem env) (compile-member mem env resugar))]]
-  (define compile-expr (λ (expr env) (compile-expr/internal expr env resugar)))
+  (define compile-expr (λ (expr env)
+       (display (format "Compiling: ~a\n" (pretty expr)))
+       (compile-expr/internal expr env resugar)))
   (define (compile-body l body new-env)
     (mark l (compile-expr body new-env)))
   (define (compile-lookup l obj field lookup-type)
@@ -322,8 +326,7 @@
                         (r:list #,@(map adorn brs)))
                 #,(adorn else-block))
              (compile-expr test env)))
-         #,(frame resugar #`(r:list "if*" __) ; TODO (temporary)
-                  (compile-expr block env))
+         #,(compile-expr block env)
          #,(compile-expr (s-if-else l brs else-block) env))])))]
     
     [(s-try l try (s-bind l2 id ann) catch)
