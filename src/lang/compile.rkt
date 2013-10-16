@@ -384,7 +384,8 @@
         [(s-lam l _ args _ doc body _)
          (with-syntax ([(arg ...) (args-stx l args)])
            #`(p:arity-catcher (arg ...) #,(compile-expr body env)))]
-        [_ #`(p:p-base-app #,(compile-expr fun env))]))
+        [_
+          #`(p:p-base-app #,(compile-expr fun env))]))
      (attach l
         (with-syntax ([fun (compile-fun-expr fun)]
                       [(arg ...) (map (curryr compile-expr env) args)])

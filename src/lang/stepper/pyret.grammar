@@ -55,13 +55,13 @@ core
 	Fun : S * String * [String] * [Bind] * Ann * String * Expr * Expr -> Stmt;
 	Var : S * Bind * Expr -> Stmt;
 	Let : S * Bind * Expr -> Stmt;
-	Try : S * Expr * Bind * Expr -> Stmt;
+	Assign : S * String * Expr -> Stmt;
 	
-	IfElse : S * [IfBranch] * Expr -> Stmt;
+	IfElse : S * [IfBranch] * Expr -> Expr;
 	IfBranch : S * Expr * Expr -> IfBranch;
 	
-	Cases : S * Expr * Expr * [CasesBranch] -> Stmt;
-	CasesElse : S * Expr * Expr * [CasesBranch] * Expr -> Stmt;
+	Cases : S * Expr * Expr * [CasesBranch] -> Expr;
+	CasesElse : S * Expr * Expr * [CasesBranch] * Expr -> Expr;
 	CasesBranch : S * String * [Bind] * Expr -> CasesBranch;
 
 	Data : S * String * [String] * [Variant] * [Member] * Expr -> Stmt;
@@ -76,7 +76,7 @@ core
 
 	App : S * Expr * [Expr] -> Expr;
 	LeftApp : S * Expr * Expr * [Expr] -> Expr;
-	Assign : S * String * Expr -> Expr;
+	Try : S * Expr * Bind * Expr -> Expr;
 	
 	Dot : S * Expr * String -> Expr;
 	Bracket : S * Expr * Expr -> Expr;
@@ -158,14 +158,14 @@ surface
 	Var : S * Bind * Expr -> Stmt;
 	Let : S * Bind * Expr -> Stmt;
 	When : S * Expr * Expr -> Stmt;
-	Try : S * Expr * Bind * Expr -> Stmt;
+	Assign : S * String * Expr -> Stmt;
 	
-	If : S * [IfBranch] -> Stmt;
-	IfElse : S * [IfBranch] * Expr -> Stmt;
+	If : S * [IfBranch] -> Expr;
+	IfElse : S * [IfBranch] * Expr -> Expr;
 	IfBranch : S * Expr * Expr -> IfBranch;
 	
-	Cases : S * Expr * Expr * [CasesBranch] -> Stmt;
-	CasesElse : S * Expr * Expr * [CasesBranch] * Expr -> Stmt;
+	Cases : S * Expr * Expr * [CasesBranch] -> Expr;
+	CasesElse : S * Expr * Expr * [CasesBranch] * Expr -> Expr;
 	CasesBranch : S * String * [Bind] * Expr -> CasesBranch;
 
 	Data : S * String * [String] * [Variant] * [Member] * Expr -> Stmt;
@@ -184,7 +184,7 @@ surface
     Op : S * String * Expr * Expr -> Expr;
 	App : S * Expr * [Expr] -> Expr;
 	LeftApp : S * Expr * Expr * [Expr] -> Expr;
-	Assign : S * String * Expr -> Expr;
+	Try : S * Expr * Bind * Expr -> Expr;
 	
 	Dot : S * Expr * String -> Expr;
 	Bracket : S * Expr * Expr -> Expr;
@@ -232,8 +232,8 @@ rules
     App(s, Bracket(s, Id(s, "list"), Str(s, "link")),
       [elt, List(s, [elts ...])]);
   When(s, test, body) ->
-    IfElse(s, [IfBranch(s, test, body)],
-      Block(s, [Expr(Id(s, "p:nothing"))]));
+    Expr(IfElse(s, [IfBranch(s, test, body)],
+          Block(s, [Expr(Id(s, "p:nothing"))])));
   Dot(s, val, field) -> Bracket(s, val, Str(s, field));
   Colon(s, obj, field) -> ColonBracket(s, obj, Str(s, field));
   Paren(s, x) -> x;

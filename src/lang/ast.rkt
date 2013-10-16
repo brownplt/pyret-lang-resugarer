@@ -82,8 +82,8 @@ these metadata purposes.
 
 (define (s-stmt? x)
   (let [[stmt-types (list
-     s-fun? s-var? s-let? s-try? s-if? s-if-else? s-cases?
-     s-cases-else? s-data? s-when?)]]
+     s-let? s-fun? s-data? s-when?
+     s-var? s-assign?)]]
     (ormap (λ (pred) (pred x)) stmt-types)))
 
 ;; s-fun : srcloc Symbol (Listof Symbol) (Listof s-bind) Ann String s-block s-block
