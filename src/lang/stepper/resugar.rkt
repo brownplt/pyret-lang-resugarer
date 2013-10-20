@@ -96,10 +96,10 @@
 
 (define (display-skip t)
   (when DEBUG_STEPS
-    (display (format "-->(SKIP)\n~a\n\n" (pretty t)))))
+    (display (format "[SKIP]\n~a\n\n" (pretty t)))))
 
 (define (display-step t)
-  (display (format "\n-->\n~a\n\n" (pretty t)))
+  (display (format "\n~a\n\n" (pretty t)))
   (when DEBUG_STEPS (newline)))
     
 

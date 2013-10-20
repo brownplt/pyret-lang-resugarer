@@ -7,11 +7,12 @@
   racket/list
   "ast.rkt"
   "stepper/data.rkt"
-  (only-in "runtime-defns.rkt" to-string))
+  (only-in "runtime-defns.rkt" to-string pyret-to-string))
 
 (provide
   pretty
-  pretty-ann)
+  pretty-ann
+  show-pyret-val)
 
 (define (pretty ast) (vary-pretty ast 0))
 
@@ -69,10 +70,13 @@
         (apply newlines-prefixed (map prettier (s-block-stmts block)))
         (prettier block)))
   
+  (define (racket-repr-to-string val)
+    (format "~a" val))
+  
   (match ast
     
     ; Resugarer-specific:
-    [(? Val? ast) (to-string (Val-value ast))]
+    [(? Val? ast) (Val-value ast)]
     [(? Var? ast) (pretty (Var-value ast))] ;TODO
     [(? Func? ast) (pretty (Func-term ast))]
     ; End
@@ -213,9 +217,12 @@
 
     [(s-paren _ e) (format "(~a)" (pretty e))]
     
-    [else (format "<unprintable-expr>")]))
+    [else (show-pyret-val ast)]))
 
-
+(define (show-pyret-val x)
+  (format "<~a>"
+          (cond [(procedure? x) "proc"]
+                [else (to-string x)])))
 
 (define (pretty-ann ann)
   (match ann

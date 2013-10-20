@@ -974,6 +974,11 @@ And the object was:
         (set-p-placeholder-wrappers! self (cons (p-base-app pred) wrappers))
         nothing)))))
 
+(define (pyret-to-string val)
+  (cond [(p-opaque? val) (format "~a\n" val)]
+        [(p-base? val) (format "~a\n" (to-repr val))]
+        [else "<unprintable-expr>"]))
+
 (define gensym-pfun (pλ (s)
   "Generate a random string with the given prefix"
   (cond

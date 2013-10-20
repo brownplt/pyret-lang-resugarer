@@ -3,6 +3,7 @@
 (require "data.rkt")
 (require "../ast.rkt")
 (require "grammar.rkt")
+(require "../pretty.rkt")
 (require (only-in "../runtime-defns.rkt" to-string))
 (require (except-in parser-tools/lex nothing))
 (require ragg/support)
@@ -27,10 +28,6 @@
 
 (define (srcloc->aterm s)
   (Node 'S (reify-srcloc s)))
-
-
-(define (show-pyret-val x)
-  (to-string x))
 
 (define (ast->aterm ast keep-srcloc)
   (define-syntax-rule (node l s xs ...)
