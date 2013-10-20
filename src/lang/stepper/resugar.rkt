@@ -92,14 +92,14 @@
   (let* [[t (reconstruct-stack x)]
              [u ((unexpand) t (sort t) #f)]]
     (when (not (CouldNotUnexpand? u))
-      (display (format "\n~a\n" (vary-pretty u 1))))))
+      (display (format "\n~a\n" (pretty u))))))
 
 (define (display-skip t)
   (when DEBUG_STEPS
-    (display (format "-->(SKIP)\n~a\n\n" (vary-pretty t 1)))))
+    (display (format "-->(SKIP)\n~a\n\n" (pretty t)))))
 
 (define (display-step t)
-  (display (format "\n-->\n~a\n\n" (vary-pretty t 1)))
+  (display (format "\n-->\n~a\n\n" (pretty t)))
   (when DEBUG_STEPS (newline)))
     
 

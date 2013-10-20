@@ -11,8 +11,7 @@
 
 (provide
   pretty
-  pretty-ann
-  vary-pretty)
+  pretty-ann)
 
 (define (pretty ast) (vary-pretty ast 0))
 
@@ -46,7 +45,7 @@
   (define (pretty-fun-header name params args ann)
     (spaces
      (if (empty? params) #f (angles (comma-sep (map pretty params))))
-     (concat (pretty name)
+     (concat name
              (parens (comma-sep (map pretty args))))
      (pretty-return-ann ann)))
 
