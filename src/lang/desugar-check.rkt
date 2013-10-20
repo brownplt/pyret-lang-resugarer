@@ -9,21 +9,30 @@
 
 (struct check-info (srcloc name check-body))
 
+
 (define (get-checks stmts)
+  (define standalone-counter 0)
   (define (add-check stmt lst)
     (match stmt
       [(s-fun s name _ _ _ _ _ check)
        (cons (check-info s name check) lst)]
-      [(s-data s name _ _ _ check)
+      [(s-data s name _ _ _ _ check)
        (cons (check-info s name check) lst)]
+      [(s-check s body)
+       (begin
+         (set! standalone-counter (+ 1 standalone-counter))
+         (cons (check-info s (string->symbol
+                              (format "check-block-~a"
+                                      standalone-counter))
+                           body) lst))]
       [_ lst]))
-  (foldl add-check empty stmts))
+  (foldr add-check empty stmts))
 
 ;; srcloc (listof check-info) -> s-block
 (define (create-check-block s checks)
   (define (create-checker check)
     (match check
-      [(check-info (info loc _) name body)
+      [(check-info loc name body)
        (define source (srcloc-source loc))
        (define line (srcloc-line loc))
        (define col (srcloc-column loc))
@@ -46,9 +55,9 @@
   (define checkers (map create-checker checks))
   (s-block s
     (list
-      (s-app s (s-bracket s (s-id s 'checkers) (s-str s "run-checks"))
+      (s-app s (s-dot s (s-id s 'checkers) 'run-checks)
                (list (s-list s checkers))))))
-  
+
 
 (define (desugar-check/internal ast)
   (define ds desugar-check/internal)
@@ -66,15 +75,20 @@
   (define (ds-bind b)
     (match b
      [(s-bind s name ann) (s-bind s name (ds-ann ann))]))
+  (define (ds-variant-member vm)
+    (match vm
+     [(s-variant-member s mutable? bind)
+      (s-variant-member s mutable? (ds-bind bind))]))
   (define (ds-variant var)
     (match var
      [(s-singleton-variant s name members)
       (s-singleton-variant s name (map ds-member members))]
      [(s-variant s name binds members)
-      (s-variant s name (map ds-bind binds) (map ds-member members))]))
+      (s-variant s name (map ds-variant-member binds) (map ds-member members))]))
   (define (ds-member mem)
     (match mem
      [(s-data-field s name val) (s-data-field s (ds name) (ds val))]
+     [(s-mutable-field s name ann val) (s-mutable-field s (ds name) (ds-ann ann) (ds val))]
      [(s-method-field s name args ann doc body check)
       (s-method-field s name (map ds-bind args) (ds-ann ann) doc (ds body) (s-block s (list)))]))
   (match ast
@@ -84,19 +98,23 @@
      (define ds-stmts (map ds flat-stmts))
      (define do-checks (create-check-block s checks-to-perform))
      (cond
-      [(empty? ds-stmts) 
+      [(empty? checks-to-perform)
+       (s-block s ds-stmts)]
+      [(empty? ds-stmts)
        (s-block s (list do-checks (s-id s 'nothing)))]
       [(cons? ds-stmts)
+       (define id-result (gensym 'result-after-checks))
        (define last-expr (last ds-stmts))
        (s-block s
         (append
           (take ds-stmts (- (length ds-stmts) 1))
           (list
-              (s-let s (s-bind s '%result-after-checks (a-blank)) last-expr)
+              (s-let s (s-bind s id-result (a-blank)) last-expr)
               do-checks
-              (s-id s '%result-after-checks))))])]
-    [(s-data s name params variants shares check)
+              (s-id s id-result))))])]
+    [(s-data s name params mixins variants shares check)
      (s-data s name params
+             (map ds mixins)
              (map ds-variant variants)
              (map ds-member shares)
              (s-block s (list)))]
@@ -112,6 +130,9 @@
     [(s-var s name val) (s-var s (ds-bind name) (ds val))]
     [(s-let s name val) (s-let s (ds-bind name) (ds val))]
 
+    [(s-graph s bindings) (s-graph s (map ds bindings))]
+    [(s-user-block s body) (s-user-block s (ds body))]
+
     [(s-fun s name typarams args ann doc body check)
      (s-fun s name typarams (map ds-bind args) (ds-ann ann) doc (ds body) (s-block s (list)))]
 
@@ -124,13 +145,15 @@
     [(s-when s test body)
      (s-when s (ds test) (ds body))]
 
+    [(s-check s body) (s-id s 'nothing)]
+
     [(s-if s if-bs) (s-if s (map ds-if-branch if-bs))]
     [(s-if-else s if-bs else) (s-if-else s (map ds-if-branch if-bs) (ds else))]
 
     [(s-cases s type val c-bs)
-     (s-cases s (ds type) (ds val) (map ds-cases-branch c-bs))]
+     (s-cases s (ds-ann type) (ds val) (map ds-cases-branch c-bs))]
     [(s-cases-else s type val c-bs else)
-     (s-cases-else s (ds type) (ds val) (map ds-cases-branch c-bs) (ds else))]
+     (s-cases-else s (ds-ann type) (ds val) (map ds-cases-branch c-bs) (ds else))]
 
     [(s-try s try x exn) (s-try s (ds try) x (ds exn))]
 
@@ -143,11 +166,15 @@
 
     [(s-extend s super fields) (s-extend s (ds super) (map ds-member fields))]
 
+    [(s-update s super fields) (s-update s (ds super) (map ds-member fields))]
+
     [(s-obj s fields) (s-obj s (map ds-member fields))]
 
     [(s-list s elts) (s-list s (map ds elts))]
 
     [(s-dot s val field) (s-dot s (ds val) field)]
+
+    [(s-get-bang s val field) (s-get-bang s (ds val) field)]
 
     [(s-bracket s val field) (s-bracket s (ds val) (ds field))]
 
@@ -158,7 +185,7 @@
     [(s-paren s e) (s-paren s (ds e))]
 
     [(s-not s e) (s-not s (ds e))]
-    
+
     [(s-op s op e1 e2) (s-op s op (ds e1) (ds e2))]
 
     [(or (s-num _ _)
@@ -170,14 +197,32 @@
 
 (define (desugar-check ast)
   (match ast
+    [(s-prog s imports (s-block s2 (list)))
+     (define get-results (s-app s (s-dot s (s-id s 'checkers) 'get-results) (list (s-id s 'nothing))))
+     (define clear (s-app s (s-dot s (s-id s 'checkers) 'clear-results) empty))
+     (s-prog s imports (s-block s (list clear get-results)))]
     [(s-prog s imports (s-block s2 stmts))
      (define no-provides (filter (negate s-provide?) imports))
      ;; NOTE(joe, dbp): This is somewhere between a hack and a reasonable solution.
      ;; The toplevel may end in a statement that we cannot let-bind (which is
      ;; what desugar-check/internal will try to do), so we add a nothing at
-     ;; the end
-     (define with-checks (desugar-check/internal (s-block s2 (append stmts (list (s-id s2 'nothing))))))
-     (define get-results (s-app s (s-dot s (s-id s 'checkers) 'get-results) empty))
+     ;; the end if this is true, and if not, we bind the result for use here
+     ;; before passing it off.  (The toplevel is hopeless, etc.)
+     (define last-stmt (last stmts))
+     (define all-but-last (take stmts (- (length stmts) 1)))
+     (define ok-last (ok-last-stmt last-stmt))
+     (define result-id (gensym 'result))
+     (define with-checks
+      (cond
+        [ok-last
+         (define bind-result (s-let s (s-bind s result-id (a-blank)) last-stmt))
+         (define new-stmts
+          (append all-but-last (list bind-result (s-id s 'nothing))))
+          (desugar-check/internal (s-block s2 new-stmts))]
+        [else
+         (define bind-result (s-let s (s-bind s result-id (a-blank)) (s-id s2 'nothing)))
+         (desugar-check/internal (s-block s2 (append stmts (list bind-result (s-id s2 'nothing)))))]))
+     (define get-results (s-app s (s-dot s (s-id s 'checkers) 'get-results) (list (s-id s result-id))))
      (define clear (s-app s (s-dot s (s-id s 'checkers) 'clear-results) empty))
      (s-prog s no-provides (s-block s (append (list clear) (s-block-stmts with-checks) (list get-results))))]
     [ast (desugar-check/internal ast)]))

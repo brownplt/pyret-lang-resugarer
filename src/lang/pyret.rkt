@@ -2,6 +2,7 @@
 
 (provide
   bare-read-syntax
+  get-info
   (rename-out [my-read read]
               [my-read-syntax read-syntax]))
 
@@ -9,11 +10,19 @@
   racket/runtime-path
   syntax/strip-context
   (only-in rnrs/io/ports-6 port-eof?)
-  "settings.rkt"
+  "../parameters.rkt"
+  "../color-tokenizer.rkt"
+  "type-env.rkt"
   "compile.rkt"
   "desugar.rkt"
   "typecheck.rkt"
   "eval.rkt")
+
+(define (get-info in mod line col pos)
+  (lambda (key default)
+    (case key
+      [(color-lexer) get-token]
+      [else default])))
 
 (define-runtime-module-path pyret-lang-racket "pyret-lang-racket.rkt")
 
@@ -23,14 +32,14 @@
 ; NOTE(joe): Only the first file gets compiled in check mode, so this helper
 ; returns true the first time, and sets the parameter to be false after
 (define (test-check-mode)
-  (define old-value (param-compile-check-mode))
-  (param-compile-check-mode #f)
+  (define old-value (current-check-mode))
+  (current-check-mode #f)
   old-value)
 
-(define (bare-read-syntax src in #:check [check #f])
+(define (bare-read-syntax src in #:check [check #f] #:type-env [env DEFAULT-ENV])
   (cond
     [(port-eof? in) eof]
-    [else (strip-context (pyret->racket src in #:check check))]))
+    [else (strip-context (pyret->racket src in #:check check #:type-env env))]))
 
 (define (my-read-syntax src in)
   (cond
@@ -44,6 +53,6 @@
               #`(module src-syntax (file pyret-lang-racket-stx)
                   (r:require (r:only-in racket/base current-read-interaction current-print void))
                   (void (current-read-interaction repl-eval-pyret))
-                  (void (current-print print-pyret))
-                  #,(pyret->racket src in #:toplevel #t #:check (test-check-mode)))))]))
+                  (void (current-print (print-pyret #,(current-check-mode))))
+                  #,(pyret->racket src in #:type-env WHALESONG-ENV #:toplevel #t #:check (test-check-mode)))))]))
 

@@ -11,7 +11,10 @@
 
 (provide
   pretty
-  pretty-ann)
+  pretty-ann
+  vary-pretty)
+
+(define (pretty ast) (vary-pretty ast 0))
 
 (define tab-size 2)
 
@@ -32,20 +35,21 @@
   (define (spaces . xs) (sep " " xs))
   (define (concat . xs) (sep "" xs))
   (define (newlines . xs) (sep (format "\n~a" (indent ind)) xs))
+  (define (newlines-prefixed . xs) (sep "\n" (map (lambda (x) (format "~a~a" (indent ind) x)) xs)))
 
   (define (pretty-return-ann ann)
     (if (a-blank? ann) #f (format "-> ~a" (pretty-ann ann))))
   
   (define (pretty-doc doc)
     (if (equal? "" doc) #f (format "doc: \"~a\"" doc)))
-  
+
   (define (pretty-fun-header name params args ann)
     (spaces
      (if (empty? params) #f (angles (comma-sep (map pretty params))))
      (concat (pretty name)
              (parens (comma-sep (map pretty args))))
      (pretty-return-ann ann)))
-  
+
   (define (pretty-method-header args ann)
     (spaces
      (parens (comma-sep (map pretty args)))
@@ -56,26 +60,36 @@
         (newlines "check:"
                   (indented (prettier block)))))
   
-  (define (show-value v)
-    (to-string v))
+  (define (pretty-implicit-block block)
+    (if (s-block? block)
+        (apply newlines-prefixed (map pretty (s-block-stmts block)))
+        (pretty block)))
+  
+  (define (prettier-implicit-block block)
+    (if (s-block? block)
+        (apply newlines-prefixed (map prettier (s-block-stmts block)))
+        (prettier block)))
   
   (match ast
     
-    [(? Val? ast) (show-value (Val-value ast))]
-    
+    ; Resugarer-specific:
+    [(? Val? ast) (to-string (Val-value ast))]
     [(? Var? ast) (pretty (Var-value ast))] ;TODO
-    
     [(? Func? ast) (pretty (Func-term ast))]
+    ; End
     
     [(? string? ast) (format "~v" ast)]
     
     [(? symbol? ast) (symbol->string ast)]
     
     [(s-prog _ imps block)
-     (apply newlines (append (map pretty imps) (list (pretty block))))]
+     (apply newlines
+        (append
+         (map pretty imps)
+         (list (pretty-implicit-block block))))]
     
     [(s-block _ stmts)
-     (apply newlines (map pretty stmts))]
+     (apply newlines (cons "block:" (map indented (map prettier stmts))))]
     
     [(s-let _ bnd val)
      (format "~a = ~a" (pretty bnd) (pretty val))]
@@ -118,21 +132,21 @@
     
     [(s-if _ (cons (s-if-branch _ cond consq) brs))
      (newlines (format "if ~a:" (pretty cond))
-               (indented (prettier consq))
+               (indented (prettier-implicit-block consq))
                (if (empty? brs) #f (apply newlines (map pretty brs)))
                "end")]
     
     [(s-if-else _ (cons (s-if-branch _ cond consq) brs) else)
      (newlines (format "if ~a:" (pretty cond))
-               (indented (prettier consq))
+               (indented (prettier-implicit-block consq))
                (if (empty? brs) #f (apply newlines (map pretty brs)))
                "else:"
-               (indented (prettier else))
+               (indented (prettier-implicit-block else))
                "end")]
 
     [(s-if-branch _ cond consq)
      (newlines (format "else if ~a:" (pretty cond))
-               (indented (prettier consq)))]
+               (indented (prettier-implicit-block consq)))]
     
     [(s-for _ iter binds ann body)
      (newlines (concat "for "
@@ -200,107 +214,9 @@
 
     [(s-paren _ e) (format "(~a)" (pretty e))]
     
-    [val (show-value val)]))
-  
-#|
-  (define (pretty-member ast)
-    (match ast
-      [(s-data-field s name value)
-       (format "[~a] : ~a" (pretty name) (pretty value))]))
-  (define (pretty-if-branch br ind)
-    (format "~aelse if ~a:\n~a~a\n"
-            indent
-            (next-pretty (s-if-branch-expr br))
-            next-indent
-            (next-pretty (s-if-branch-body br))))
-  (define (pretty-if-branches brs ind)
-    (string-join (map (λ (br) (pretty-if-branch br ind)) brs) "\n"))
-  (match ast
-    [(s-block s stmts)
-     (define strs (map pretty stmts))
-     (string-join strs (format "\n~a" indent))]
-    [(s-if _ (cons (s-if-branch _ cond consq) brs))
-     (format "if ~a:\n~a~a\n~a~aend"
-             (next-pretty cond)
-             next-indent
-             (next-pretty consq)
-             (pretty-if-branches brs ind)
-             indent)]
-    [(s-if-else _ (cons (s-if-branch _ cond consq) brs) else)
-     (format "if ~a:\n~a~a\n~a~aelse:\n~a~a\n~aend"
-             (next-pretty cond)
-             next-indent
-             (next-pretty consq)
-             (pretty-if-branches brs ind)
-             indent
-             next-indent
-             (next-pretty else)
-             indent)]
-    [(s-lam s typarams args ann doc body check)
-     (define s-typarams
-       (cond [(cons? typarams) (format "<~a>" (string-join (map symbol->string typarams) ", "))]
-             [(empty? typarams) ""]))
-     (define s-args (string-join (map pretty-bind args) ", "))
-     (define s-ann (pretty-ann ann))
-     (define s-body (vary-pretty (s-block s (cons (s-str s doc) (s-block-stmts body))) (increase-indent ind)))
-     ;; NOTE(dbp): pretty printing for check is almost certainly wrong
-     (define s-check (pretty check))
-     (format "\\~a ~a -> ~a:\n~a~a\n~acheck~aend"
-             s-typarams
-             s-args
-             s-ann
-             next-indent
-             s-body
-             indent
-             s-check)]
-    
-    [(s-method s args ann doc body check)
-     (define s-args (string-join (map pretty-bind args) ", "))
-     (define s-ann (pretty-ann ann))
-     (define s-body (pretty body))
-     (define s-check (pretty check))
-     (format "method(~a) -> ~a: ~a check ~a end" s-args s-ann s-body s-check)]
+    [else (format "<unprintable-expr>")]))
 
-    [(s-assign s name expr)
-     (format "~a := ~a" name (pretty expr))]
 
-    [(s-app s fun args)
-     (format "~a(~a)" (pretty fun) (commas (map pretty args)))]
-
-    [(s-extend s super fields)
-     (format "~a.{ ~a }"
-             (pretty super)
-             (string-join (map pretty-member fields) ", "))]
-
-    [(s-obj s fields)
-     (format "{ ~a }"
-             (string-join (map pretty-member fields) ", "))]
-
-    [(s-op s op e1 e2)
-     (format "~a ~a ~a" (pretty e1) (substring (symbol->string op) 2) (pretty e2))]
-    
-    [(s-dot s val field)
-     (format "~a.~a" (pretty val) field)] 
-    
-    [(s-bracket s val field)
-     (format "~a.[~a]" (pretty val) (pretty field))]
-    
-    [(s-colon s obj field)
-     (format "~a:~a" (pretty obj) field)]
-    
-    [(s-colon-bracket s obj field)
-     (format "~a:[~a]" (pretty obj) (pretty field))]
-
-    [(s-num _ n) (number->string n)]
-    [(s-bool _ #t) "true"]
-    [(s-bool _ #f) "false"]
-    [(s-str _ s) (format "\"~a\"" s)]
-    [(s-id _ id) (symbol->string id)]
-
-    [(s-paren _ e) (format "(~a)" (pretty e))]
-
-    [else "<unprintable-expr>"]))
-|#
 
 (define (pretty-ann ann)
   (match ann
@@ -313,6 +229,9 @@
     [(a-blank) "Any"]
     [(a-any) "Any"]
     [(a-app _ base args) (format "~a<~a>" (pretty-ann base) (string-join (map pretty-ann args) ", "))]
-    [(a-pred _ ann expr) (format "~a(~a)" (pretty-ann ann) (pretty expr))]))
-
-(define (pretty ast) (vary-pretty ast 0))
+    [(a-pred _ ann expr) (format "~a(~a)" (pretty-ann ann) (pretty expr))]
+    [(a-record _ fields) (format "{~a}" (string-join
+                                         (map (λ(f) (format "~a: ~a"
+                                                            (a-field-name f)
+                                                            (pretty-ann (a-field-ann f))))
+                                              fields) ", "))]))

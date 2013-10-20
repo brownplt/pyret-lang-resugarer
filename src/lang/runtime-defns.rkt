@@ -1,4 +1,4 @@
-#lang racket
+#lang whalesong
 
 (require (for-syntax racket/base))
 (require "string-map.rkt")
@@ -35,8 +35,6 @@
   (map f (hash-keys s)))
 
 (define (sqr x) (* x x))
-
-(define pi 3.1415926) ;; NOTE(joe): good enough for government work
 
 ;; NOTE(joe): slow enough for government work
 (define (string-contains str substr)
@@ -88,6 +86,10 @@
 (struct p-fun p-base () #:transparent)
 ;; p-method: p-base Proc -> p-method
 (struct p-method p-base () #:transparent)
+;; p-mutable p-base Box (Listof (Value -> Value)) (Listof (Value -> Value))
+(struct p-mutable p-base (b read-wrappers write-wrappers))
+;; p-placeholder p-base Box (Listof (Value -> Value))
+(struct p-placeholder p-base (b wrappers) #:mutable)
 (struct p-opaque (val))
 
 (define (value-predicate-for typ)
@@ -99,6 +101,9 @@
     [(eq? p-str typ) p-str?]
     [(eq? p-fun typ) p-fun?]
     [(eq? p-method typ) p-method?]
+    [(eq? p-mutable typ) p-mutable?]
+    [(eq? p-placeholder typ) p-placeholder?]
+    [(eq? p-base typ) p-base?]
     [else
      (error 'get-pred (format "py-match doesn't work over ~a" typ))]))
 
@@ -115,8 +120,23 @@
   (syntax-case stx (p-nothing p-object p-num p-str p-bool p-fun p-method)
     [(_ p-nothing _ () body) #'body]
     [(_ p-object _ () body) #'body]
+    [(_ p-base _ () body) #'body]
     [(_ p-fun _ () body) #'body]
     [(_ p-method _ () body) #'body]
+    [(_ p-mutable matchval (b rw ww) body)
+     (with-syntax [(b-id (datum->syntax #'body (syntax->datum #'b)))
+                   (rw-id (datum->syntax #'body (syntax->datum #'rw)))
+                   (ww-id (datum->syntax #'body (syntax->datum #'ww)))]
+       #'(maybe-bind [(b-id (p-mutable-b matchval))
+                      (rw-id (p-mutable-read-wrappers matchval))
+                      (ww-id (p-mutable-write-wrappers matchval))]
+           body))]
+    [(_ p-mutable matchval (b w) body)
+     (with-syntax [(b-id (datum->syntax #'body (syntax->datum #'b)))
+                   (w-id (datum->syntax #'body (syntax->datum #'w)))]
+       #'(maybe-bind [(b-id (p-placeholder-b matchval))
+                      (w-id (p-placeholder-wrappers matchval))]
+           body))]
     [(_ p-num matchval (n) body)
      (with-syntax [(n-id (datum->syntax #'body (syntax->datum #'n)))]
       #'(maybe-bind [(n-id (p-num-n matchval))] body))]
@@ -175,6 +195,13 @@
     [arity-mismatch-args-list
      (arity-error (get-top-loc) (quote (arg ...)) arity-mismatch-args-list)]))
 
+(define-syntax-rule (lambda-arity-catcher (arg ...) e ...)
+  (case-lambda
+    [(arg ...) e ...]
+    [arity-mismatch-args-list
+     (arity-error (get-top-loc) (rest (quote (arg ...))) (rest arity-mismatch-args-list))]))
+
+
 ;; NOTE(joe): the nested syntax/loc below appears necessary to get good
 ;; profiling and debugging line numbers for the created functions
 (define-syntax (pλ stx)
@@ -183,7 +210,7 @@
      (quasisyntax/loc stx
       (mk-fun
         #,(syntax/loc stx (arity-catcher (arg ...) e ...))
-        #,(syntax/loc stx (arity-catcher (_ arg ...) e ...))
+        #,(syntax/loc stx (lambda-arity-catcher (_ arg ...) e ...))
         doc))]))
 
 (define-syntax (pλ/internal stx)
@@ -192,7 +219,7 @@
      (quasisyntax/loc stx
       (mk-fun-nodoc
         #,(syntax/loc stx (arity-catcher (arg ...) e ...))
-        #,(syntax/loc stx (arity-catcher (_ arg ...) e ...))))]))
+        #,(syntax/loc stx (lambda-arity-catcher (_ arg ...) e ...))))]))
 
 (define-syntax (pμ stx)
   (syntax-case stx ()
@@ -224,7 +251,7 @@
       (list (exn:fail:pyret-srcloc a-struct))))
 
 (define (mk-pyret-exn str loc val sys)
-  (exn:fail:pyret str (current-continuation-marks) (apply srcloc loc) sys val))
+  (exn:fail:pyret str (current-continuation-marks) (apply srcloc (append loc (list (list)))) sys val))
 
 ;; mk-exn: p-exn -> Value
 (define (mk-exn e)
@@ -251,7 +278,7 @@
       (map (lambda (l) (mk-object (make-string-map (mk-loc l))))
       trace-locs)))
   (mk-object
-   (make-string-map 
+   (make-string-map
     (append
       (mk-loc loc)
       (list
@@ -356,40 +383,72 @@
 (define (mk-method-nodoc f)
   (_mk-method f nothing (mk-fun-method f "")))
 
+(define mutable-bad-app (bad-app "mutable"))
+(define mutable-bad-meth (bad-meth "mutable"))
+(define (mk-mutable v reads writes)
+  (p-mutable no-brands mutable-dict mutable-bad-app mutable-bad-meth (box v) reads writes))
+
+(define mk-mutable-pfun (pλ/internal (loc) (val read write)
+  (define check (p-base-app check-brand-pfun))
+  (define checked-read (check Function read (mk-str "Function")))
+  (define checked-write (check Function write (mk-str "Function")))
+  (mk-mutable val (list (p-base-app checked-read)) (list (p-base-app checked-write)))))
+
+(define mk-simple-mutable-pfun (pλ/internal (loc) (val)
+  (mk-mutable val (list) (list))))
+
+(define placeholder-bad-app (bad-app "placeholder"))
+(define placeholder-bad-meth (bad-meth "placeholder"))
+(define (mk-placeholder)
+  (p-placeholder no-brands placeholder-dict placeholder-bad-app placeholder-bad-meth (box #f) empty))
+
+(define mk-placeholder-pfun (pλ/internal (loc) ()
+  (mk-placeholder)))
+
 (define exn-brand (gensym 'exn))
 
-;; pyret-error : Info String String -> p-exn
-(define (pyret-error info type message)
-  (define full-error (exn+loc->message (mk-str message) info))
-  (define obj (mk-object (make-string-map 
+;; pyret-error : Loc String String -> p-exn
+(define (pyret-error loc type message)
+  (define full-error (exn+loc->message (mk-str message) loc))
+  (define obj (mk-object (make-string-map
     (list (cons "message" (mk-str message))
           (cons "type" (mk-str type))))))
-  (mk-pyret-exn full-error info obj #t))
+  (mk-pyret-exn full-error loc obj #t))
 
 ;; get-raw-field : Loc Value String -> Value
 (define (get-raw-field loc v f)
-  (string-map-ref (get-dict v) f
-    (lambda()
-      (raise (pyret-error loc "field-not-found" (format "~a was not found" f))))))
+ (string-map-ref (get-dict v) f
+   (lambda()
+     (raise (pyret-error loc "field-not-found" (format "~a was not found on ~a" f (to-repr v)))))))
 
 ;; get-field : Loc Value String -> Value
 (define (get-field loc v f)
+ (define vfield (get-raw-field loc v f))
+ (cond
+   [(p-mutable? vfield)
+    (raise (pyret-error loc "lookup-mutable" (format "Cannot look up mutable field \"~a\" using dot or bracket" f)))]
+   [(p-placeholder? vfield)
+    (get-placeholder-value loc vfield)]
+   [(p-method? vfield)
+    (let [(curried
+           (mk-fun (λ args (apply (p-base-method vfield)
+                                  (cons v args)))
+                   (λ args (apply (p-base-method vfield)
+                                  (cons v (rest args))))
+                   ;; NOTE(dbp 2013-08-09): If _doc isn't a string, this will blow up...
+                   ""))]
+          curried)]
+   [else vfield]))
+
+;; get-mutable-field : Loc Value String -> Value
+(define (get-mutable-field loc v f)
   (define vfield (get-raw-field loc v f))
   (cond
-    [(p-method? vfield)
-     (let [(curried
-            (mk-fun (λ args (apply (p-base-method vfield)
-                                   (cons v args)))
-                    (λ args (apply (p-base-method vfield)
-                                   (cons v (rest args))))
-                    (get-field loc vfield "_doc")))]
-       (if (has-field? vfield "tostring")
-           (extend loc curried
-                   (list
-                    (cons "tostring"
-                          (get-field loc vfield "tostring"))))
-           curried))]
-    [else vfield]))
+    [(p-mutable? vfield)
+     (define checks (p-mutable-read-wrappers vfield))
+     (foldr (lambda (c v) (c v)) (unbox (p-mutable-b vfield)) checks)]
+    [else
+     (raise (pyret-error loc "immutable-mutable-lookup" (format "Cannot look up immutable field \"~a\" with the ! operator" f)))]))
 
 (define (check-str v l)
   (cond
@@ -433,21 +492,40 @@ And the object was:
 
           (- (length argnames) 1)
           (- (length args) 1)
-          (string-join (map to-string (drop args 1)) "\n")
+          (string-join (map to-repr (drop args 1)) "\n")
           (to-string (first args)))))]))
 
 (define (arity-error loc argnames args)
-  (raise
-    (pyret-error
-      loc
-      "arity-mismatch"
-      (format
-"Arity mismatch: expected ~a arguments, but got ~a.  The ~a provided argument(s) were:
+  (define (pluralize str lst)
+    (string-append str (if (= (length lst) 1) "" "s")))
+  (define expected-names (pluralize "argument" argnames))
+  (define expected-args (pluralize "argument" args))
+  (define were/was (if (= (length args) 1) "was" "were"))
+  (cond
+    [(= (length args) 0)
+     (raise
+        (pyret-error
+          loc
+          "arity-mismatch"
+          (format
+"Expected ~a ~a, but got none."
+            (length argnames)
+            expected-names)))]
+    [else
+     (raise
+       (pyret-error
+         loc
+         "arity-mismatch"
+         (format
+"Expected ~a ~a, but got ~a.  The ~a provided ~a ~a:
 ~a"
-        (length argnames)
-        (length args)
-        (length args)
-        (string-join (map to-string args) "\n")))))
+           (length argnames)
+           expected-names
+           (length args)
+           (length args)
+           expected-args
+           were/was
+           (string-join (map to-repr args) "\n"))))]))
 
 ;; add-brand : Value Symbol -> Value
 (define (add-brand v new-brand)
@@ -469,6 +547,23 @@ And the object was:
 ;; has-field? : Value String -> Boolean
 (define (has-field? v f)
   (string-map-has-key? (get-dict v) f))
+
+(define (update loc base extension)
+  (define d (get-dict base))
+  (void (map
+    (lambda (k)
+      (define (not-found-error)
+        (raise (pyret-error loc "field-not-found" (format "Updating non-existent field ~a" k))))
+      (when (not (p-mutable? (string-map-ref d k not-found-error)))
+        (raise (pyret-error loc "update-immutable" (format "Updating immutable field (~a) disallowed" k)))))
+    (map car extension)))
+  (void (map
+    (lambda (pair)
+      (define mutable (string-map-ref d (car pair)))
+      (define checks (p-mutable-write-wrappers mutable))
+      (define value (foldr (lambda (c v) (c v)) (cdr pair) checks))
+      (set-box! (p-mutable-b mutable) (cdr pair)))
+    extension)))
 
 ;; extend : Loc Value Dict -> Value
 (define (extend loc base extension)
@@ -548,7 +643,7 @@ And the object was:
 (define brander-pfun (pλ/internal (_) ()
   (define sym (gensym))
   (mk-object
-   (make-string-map 
+   (make-string-map
     `(("brand" .
        ,(mk-brander sym))
       ("test" .
@@ -593,6 +688,11 @@ And the object was:
 (define-syntax-rule (mk-num-2-bool op opname)
   (mk-prim-fun op opname mk-bool (p-num-n p-num-n) (n1 n2) (p-num? p-num?)))
 
+(define (protect-div n1 n2)
+  (cond
+    [(= n2 0) (raise (pyret-error (get-top-loc) "div-0" "Division by zero"))]
+    [else (/ n1 n2)]))
+
 ;; meta-num-store (Hashof numing value)
 (define meta-num-store #f)
 (define (meta-num)
@@ -602,27 +702,53 @@ And the object was:
         `(("_plus" . ,(mk-num-2 + 'plus))
           ("_add" . ,(mk-num-2 + 'plus))
           ("_minus" . ,(mk-num-2 - 'minus))
-          ("_divide" . ,(mk-num-2 / 'divide))
+          ("_divide" . ,(mk-num-2 protect-div 'divide))
           ("_times" . ,(mk-num-2 * 'times))
-          ("modulo" . ,(mk-num-2 modulo 'modulo))
-          ("truncate" . ,(mk-num-1 truncate 'truncate))
-          ("sin" . ,(mk-num-1 sin 'sin))
-          ("cos" . ,(mk-num-1 cos 'cos))
-          ("sqr" . ,(mk-num-1 sqr 'sqr))
-          ("sqrt" . ,(mk-num-1 sqrt 'sqrt))
-          ("floor" . ,(mk-num-1 floor 'floor))
-          ("tostring" . ,(mk-prim-fun number->string 'tostring mk-str (p-num-n) (n) (p-num?)))
-          ("expt" . ,(mk-num-2 expt 'expt))
+          ("_torepr" . ,(mk-prim-fun number->string '_torepr mk-str (p-num-n) (n) (p-num?)))
           ("_equals" . ,(mk-prim-fun-default = 'equals mk-bool (p-num-n p-num-n) (n1 n2) (p-num? p-num?) (mk-bool #f)))
           ("_lessthan" . ,(mk-num-2-bool < 'lessthan))
           ("_greaterthan" . ,(mk-num-2-bool > 'greaterthan))
           ("_lessequal" . ,(mk-num-2-bool <= 'lessequal))
-          ("_greaterequal" . ,(mk-num-2-bool >= 'greaterequal))))))
+          ("_greaterequal" . ,(mk-num-2-bool >= 'greaterequal))
+          ("tostring" . ,(mk-prim-fun number->string 'tostring mk-str (p-num-n) (n) (p-num?)))
+          ("modulo" . ,(mk-num-2 modulo 'modulo))
+          ("truncate" . ,(mk-num-1 truncate 'truncate))
+          ("abs" . ,(mk-num-1 abs 'abs))
+          ("max" . ,(mk-num-2 max 'max))
+          ("min" . ,(mk-num-2 min 'min))
+          ("sin" . ,(mk-num-1 sin 'sin))
+          ("cos" . ,(mk-num-1 cos 'cos))
+          ("tan" . ,(mk-num-1 tan 'tan))
+          ("asin" . ,(mk-num-1 asin 'asin))
+          ("acos" . ,(mk-num-1 acos 'acos))
+          ("atan" . ,(mk-num-1 atan 'atan))
+          ("sqr" . ,(mk-num-1 sqr 'sqr))
+          ("sqrt" . ,(mk-num-1 sqrt 'sqrt))
+          ("ceiling" . ,(mk-num-1 ceiling 'ceiling))
+          ("floor" . ,(mk-num-1 floor 'floor))
+          ("log" . ,(mk-num-1 log 'log))
+          ("exp" . ,(mk-num-1 exp 'exp))
+          ("exact" . ,(mk-num-1 inexact->exact 'exact))
+          ("expt" . ,(mk-num-2 expt 'expt))))))
   meta-num-store)
 
 ;; Pyret's char-at just returns a single character string
 (define (char-at s n)
-  (substring s n (+ n 1)))
+  (cond
+    [(>= n (string-length s))
+     (raise (pyret-error (get-top-loc) "char-at"
+      (format "char-at: Index too large for string.  Index was ~a, length was ~a" n (string-length s))))]
+    [else (substring s n (+ n 1))]))
+
+(define (safe-substring s start end)
+  (define (err message)
+     (raise (pyret-error (get-top-loc) "substring" message)))
+  (define l (string-length s))
+  (cond
+    [(< start 0) (err (format "substring: Requires a non-negative start value; ~a was provided" start))]
+    [(> start l) (err (format "substring:  Start index is past the length of the string: start was ~a, length was ~a" start l))]
+    [(< end start) (err (format "substring: Requires end to be greater than start, got start of ~a and end of ~a" start end))]
+    [else (substring s start (min l end))]))
 
 (define (string-repeat s n)
   (cond
@@ -637,19 +763,21 @@ And the object was:
   (when (not meta-str-store)
     (set! meta-str-store
       (make-string-map
-        `(("append" . ,(mk-prim-fun string-append 'append mk-str (p-str-s p-str-s) (s1 s2) (p-str? p-str?)))
-          ("_plus" . ,(mk-prim-fun string-append 'plus mk-str (p-str-s p-str-s) (s1 s2) (p-str? p-str?)))
+         `(("_plus" . ,(mk-prim-fun string-append 'plus mk-str (p-str-s p-str-s) (s1 s2) (p-str? p-str?)))
+          ("_lessequal" . ,(mk-prim-fun string<=? 'lessequals mk-bool (p-str-s p-str-s) (s1 s2) (p-str? p-str?)))
+          ("_lessthan" . ,(mk-prim-fun string<? 'lessthan mk-bool (p-str-s p-str-s) (s1 s2) (p-str? p-str?)))
+          ("_greaterthan" . ,(mk-prim-fun string>? 'greaterthan mk-bool (p-str-s p-str-s) (s1 s2) (p-str? p-str?)))
+          ("_greaterequal" . ,(mk-prim-fun string>=? 'greaterequals mk-bool (p-str-s p-str-s) (s1 s2) (p-str? p-str?)))
+          ("_equals" . ,(mk-prim-fun-default string=? 'equals mk-bool (p-str-s p-str-s) (s1 s2) (p-str? p-str?) (mk-bool #f)))
+          ("append" . ,(mk-prim-fun string-append 'append mk-str (p-str-s p-str-s) (s1 s2) (p-str? p-str?)))
           ("contains" . ,(mk-prim-fun string-contains 'contains mk-bool (p-str-s p-str-s) (s1 s2) (p-str? p-str?)))
-          ("substring" . ,(mk-prim-fun substring 'substring mk-str (p-str-s p-num-n p-num-n) (s n1 n2) (p-str? p-num? p-num?)))
+          ("substring" . ,(mk-prim-fun safe-substring 'substring mk-str (p-str-s p-num-n p-num-n) (s n1 n2) (p-str? p-num? p-num?)))
           ("char-at" . ,(mk-prim-fun char-at 'char-at mk-str (p-str-s p-num-n) (s n) (p-str? p-num?)))
           ("repeat" . ,(mk-prim-fun string-repeat 'repeat mk-str (p-str-s p-num-n) (s n) (p-str? p-num?)))
           ("length" . ,(mk-prim-fun string-length 'length mk-num (p-str-s) (s) (p-str?)))
           ("tonumber" . ,(mk-prim-fun string->number 'tonumber mk-num-or-nothing (p-str-s) (s) (p-str?)))
-          ("_lessequals" . ,(mk-prim-fun string<=? 'lessequals mk-bool (p-str-s p-str-s) (s1 s2) (p-str? p-str?)))
-          ("_lessthan" . ,(mk-prim-fun string<? 'lessthan mk-bool (p-str-s p-str-s) (s1 s2) (p-str? p-str?)))
-          ("_greaterthan" . ,(mk-prim-fun string>? 'greaterthan mk-bool (p-str-s p-str-s) (s1 s2) (p-str? p-str?)))
-          ("_greaterequals" . ,(mk-prim-fun string>=? 'greaterequals mk-bool (p-str-s p-str-s) (s1 s2) (p-str? p-str?)))
-          ("_equals" . ,(mk-prim-fun-default string=? 'equals mk-bool (p-str-s p-str-s) (s1 s2) (p-str? p-str?) (mk-bool #f)))
+          ("tostring" . ,(mk-prim-fun (lambda (x) x) 'tostring mk-str (p-str-s) (s) (p-str?)))
+          ("_torepr" . ,(mk-prim-fun (lambda (x) (format "~s" x)) '_torepr mk-str (p-str-s) (s) (p-str?)))
       ))))
   meta-str-store)
 
@@ -671,54 +799,78 @@ And the object was:
        `(("_and" . ,(mk-lazy-bool-2 and 'and))
          ("_or" . ,(mk-lazy-bool-2 or 'or))
          ("tostring" . ,(mk-prim-fun bool->string 'tostring mk-str (p-bool-b) (b) (p-bool?)))
+         ("_torepr" . ,(mk-prim-fun bool->string '_torepr mk-str (p-bool-b) (b) (p-bool?)))
          ("_equals" . ,(mk-prim-fun-default equal? 'equals mk-bool (p-bool-b p-bool-b) (b1 b2) (p-bool? p-bool?) (mk-bool #f)))
          ("_not" . ,(mk-bool-1 not 'not))))))
   meta-bool-store)
 
-(define (print-pyret val)
-  (when (not (equal? val nothing))
-    (match val
-      [(p-opaque v) (print v) (newline)]
-      [(? p-base?) (printf "~a\n" (to-string val))]
-      [_ (void)])))
-
-;; to-string : Value -> String
-(define (to-string v)
-  (define (call-tostring v fallback)
-    (if (has-field? v "tostring")
-        (let [(m (get-raw-field dummy-loc v "tostring"))]
+;; serialize : Value String (method name) -> String
+(define (serialize v method)
+  (define (serialize-internal v fallback)
+    (if (has-field? v method)
+        (let [(m (get-raw-field dummy-loc v method))]
           (if (p-method? m)
               ;; NOTE(dbp): this will fail if tostring isn't defined
               ;; as taking only self.
               (py-match ((p-base-method m) v)
                         [(p-str _ _ _ _ s) s]
                         [(default _) (fallback)])
-              (fallback)))
+              (if (p-fun? m)
+                  ;; NOTE(dbp 2013-08-09): This will fail if tostring takes arguments
+                  (py-match ((p-base-app m))
+                            [(p-str _ _ _ _ s) s]
+                            [(default _) (fallback)])
+                  (fallback))))
         (fallback)))
+  (define (type-sanity-check pred typename val otherwise)
+    (if (not (pred val))
+        (raise (format "INTERNAL ERROR: Got a non-~a inside a pyret ~a: ~a." typename typename val))
+        otherwise))
   (py-match v
     [(p-nothing _ _ _ _) "nothing"]
-    [(p-num _ _ _ _ n) (format "~a" n)]
-    [(p-str _ _ _ _ s) (format "~a" s)]
-    [(p-bool _ _ _ _ b) (if b "true" "false")]
-    [(p-method _ _ _ _) (call-tostring v (λ () "[[code]]"))]
-    [(p-fun _ _ _ _) (call-tostring v (λ () "[[code]]"))]
-    [(p-object _ h _ _)
+    [(p-method _ _ _ _) (serialize-internal v (λ () "method(): end"))]
+    [(p-fun _ _ _ _) (serialize-internal v (λ () "fun(): end"))]
+    [(p-mutable _ _ _ _ _ _ _) (serialize-internal v (λ () "mutable-field"))]
+    [(p-placeholder _ _ _ _ _ _) (serialize-internal v (λ () "cyclic-field"))]
+    [(p-base _ h _ _)
      (let ()
-       (define (to-string-raw-object h)
-         (define (field-to-string f v)
-           (format "~a: ~a" f (to-string v)))
-         (format "{ ~a }"
-                 (string-join (string-map-map h field-to-string) ", ")))
-       (call-tostring
+       (define (serialize-raw-object h)
+         (define (serialize-field f v)
+           (format "~a: ~a" f (serialize v method)))
+         (format "{~a}"
+                 (string-join (string-map-map h serialize-field) ", ")))
+       (serialize-internal
         v
-        (λ () (to-string-raw-object h))))]
+        (λ () (serialize-raw-object h))))]
     [(default _) (format "~a" v)]))
 
-(define tostring-pfun (pλ/internal (loc) (o)
-  (mk-str (to-string o))))
+(define to-string (lambda (o) (serialize o "tostring")))
+(define to-repr (lambda (o) (serialize o "_torepr")))
 
-(define print-pfun (pλ/internal (loc) (o)
-  (begin (printf "~a\n" (to-string o)) nothing)))
+(define tostring-pfun (pλ/internal (loc) (o)
+  (mk-str (serialize o "tostring"))))
+(define torepr-pfun (pλ/internal (loc) (o)
+  (mk-str (serialize o "_torepr"))))
+
+(define (pyret-print o)
+  (define str
+    (cond
+      [(p-str? o) (p-str-s o)]
+      [else (to-repr o)]))
+  (begin
+    (printf "~a\n" str)
+    o))
+
+(define print-pfun (pλ/internal (loc) (o) (pyret-print o)))
+
+(define (truncate-str str n) (substring str 0 (min n (string-length str))))
+
+(define (throw-type-error! typname o)
+  (raise (pyret-error
+          (get-top-loc)
+           "type-error"
+           (format "typecheck failed; expected ~a and got\n~a"
+                              typname (truncate-str (to-repr o) 100)))))
 
 ;; check-brand-pfun : Loc -> Value * -> Value
 (define check-brand-pfun (pλ/internal (loc) (ck o s)
@@ -731,12 +883,9 @@ And the object was:
          ;; NOTE(dbp): not sure how to give good reporting
          ;; NOTE(joe): This is better, but still would be nice to highlight
          ;;  the call site as well as the destination
-         (let*
-          ([typname (p-str-s s)]
-           [val (mk-str (format "runtime: typecheck failed; expected ~a and got\n~a"
-                              typname (to-string o)))])
-         (raise (mk-pyret-exn (exn+loc->message val (get-top-loc)) (get-top-loc) val #f))))]
-    [(p-str? s)
+         (let ([typname (p-str-s s)])
+          (throw-type-error! typname o)))]
+    [(p-str? ck)
      (error "runtime: cannot check-brand with non-function")]
     [(p-fun? ck)
      (error "runtime: cannot check-brand with non-string")]
@@ -755,14 +904,82 @@ And the object was:
 (define raise-pfun (pλ/internal (loc) (o)
   (raise (mk-pyret-exn (exn+loc->message o (get-top-loc)) (get-top-loc) o #f))))
 
-(define is-nothing-pfun (pλ/internal (loc) (specimen)
-  (mk-bool (equal? specimen nothing))))
-
 ;; tie the knot of mutual state problems
 (void
   (meta-num)
   (meta-bool)
   (meta-str))
+
+(define mutable-dict
+  (make-string-map
+    (list
+      (cons "_equals" (pμ/internal (loc) (self other)
+        "Check equality of this mutable field with another"
+        (mk-bool (eq? self other))))
+      (cons "_torepr" (pμ/internal (loc) (self)
+        "Print this mutable field"
+        (mk-str "mutable-field")))
+      (cons "tostring" (pμ/internal (loc) (self)
+        "Print this mutable field"
+        (mk-str "mutable-field")))
+      (cons "get" (pμ/internal (loc) (self)
+        "Get the value in this mutable field"
+        (when (not (p-mutable? self))
+          (throw-type-error! "Mutable" self))
+        (define checks (p-mutable-read-wrappers self))
+        (foldr (lambda (c v) (c v)) (unbox (p-mutable-b self)) checks))))))
+
+(define (get-placeholder-value loc p)
+  (when (not (p-placeholder? p))
+    (throw-type-error! "Placeholder" p))
+  (define value (unbox (p-placeholder-b p)))
+  (if value value (raise (pyret-error loc "get-uninitialized-placeholder"
+                          (format "Tried to get value from uninitialized placeholder")))))
+
+(define placeholder-dict
+  (make-string-map
+    (list
+      (cons "_equals" (pμ/internal (loc) (self other)
+        "Check equality of this placeholder with another"
+        (mk-bool (eq? self other))))
+      (cons "_torepr" (pμ/internal (loc) (self)
+        "Print this placeholder"
+        (mk-str "cyclic-field")))
+      (cons "tostring" (pμ/internal (loc) (self)
+        "Print this placeholder"
+        (mk-str "cyclic-field")))
+      (cons "get" (pμ/internal (loc) (self)
+        "Get the value in the placeholder"
+        (get-placeholder-value dummy-loc self)))
+      (cons "set" (pμ/internal (loc) (self new-value)
+        "Set the value in the placeholder"
+        (when (not (p-placeholder? self))
+          (throw-type-error! "Placeholder" self))
+        (define value (unbox (p-placeholder-b self)))
+        (when value (raise (pyret-error (get-top-loc) "set-initialized-placeholder"
+                      (format "Tried to set value in already-initialized placeholder"))))
+        (define wrappers (p-placeholder-wrappers self))
+        (define value-checked (foldr (lambda (c v) (c v)) new-value wrappers))
+        (set-box! (p-placeholder-b self) value-checked)))
+      (cons "guard" (pμ/internal (loc) (self pred)
+        "Add a guard to the placeholder for when it is set"
+        (when (not (p-placeholder? self))
+          (throw-type-error! "Placeholder" self))
+        (define check (p-base-app check-brand-pfun))
+        (define checked-pred (check Function pred (mk-str "Function")))
+        (define value (unbox (p-placeholder-b self)))
+        (when value (raise (pyret-error (get-top-loc) "guard-initialized-placeholder"
+                          (format "Tried to add guard on an already-initialized placeholder"))))
+        (define wrappers (p-placeholder-wrappers self))
+        (set-p-placeholder-wrappers! self (cons (p-base-app pred) wrappers))
+        nothing)))))
+
+(define gensym-pfun (pλ (s)
+  "Generate a random string with the given prefix"
+  (cond
+    [(p-str? s)
+     (mk-str (symbol->string (gensym (p-str-s s))))]
+    [else (throw-type-error! "String" s)])))
 
 (define p-true (p-bool no-brands meta-bool-store (bad-app "true") (bad-meth "true") #t))
 (define p-false (p-bool no-brands meta-bool-store (bad-app "false") (bad-meth "false") #f))
@@ -771,6 +988,7 @@ And the object was:
   (if b p-true p-false))
 (define p-else p-true)
 (define p-pi (mk-num pi))
+(define p-e (mk-num e))
 
 (define Any (pλ/internal (loc) (_) p-true))
 
@@ -784,5 +1002,19 @@ And the object was:
 (mk-pred String p-str?)
 (mk-pred Bool p-bool?)
 (mk-pred Object p-object?)
+(mk-pred Nothing p-nothing?)
 (mk-pred Function p-fun?)
 (mk-pred Method p-method?)
+(mk-pred Mutable p-mutable?)
+(mk-pred Placeholder p-placeholder?)
+(mk-pred Opaque p-opaque?)
+
+(mk-pred is-number p-num?)
+(mk-pred is-string p-str?)
+(mk-pred is-bool p-bool?)
+(mk-pred is-object p-object?)
+(mk-pred is-nothing p-nothing?)
+(mk-pred is-function p-fun?)
+(mk-pred is-method p-method?)
+(mk-pred is-mutable p-mutable?)
+(mk-pred is-placeholder p-placeholder?)

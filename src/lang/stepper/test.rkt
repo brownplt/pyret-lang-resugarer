@@ -14,7 +14,7 @@
   (s-prog-block (parse-program (get-syntax filename fileport))))
 
 (define (test-desugar filename)
-  (let [[ast (s-prog (empty-info 'test)
+  (let [[ast (s-prog (empty-srcloc 'test)
                      (list)
                      (parse filename (open-input-file filename)))]]
     (display (pretty ast))

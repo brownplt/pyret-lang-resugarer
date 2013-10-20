@@ -1,11 +1,10 @@
-#lang whalesong
+#lang racket
 
-;(require racket/set ;; set add union member intersect map)
 (require (for-syntax racket/base))
 (require "runtime-defns.rkt")
-(require "string-map.rkt")
-(require "stepper/resugar.rkt")
 (require "ast.rkt")
+(require "stepper/resugar.rkt")
+(require "string-map.rkt")
 
 (provide
  (all-from-out "ast.rkt")
@@ -47,31 +46,52 @@
       get-dict
       get-field
       get-raw-field
+      get-mutable-field
       apply-fun
       arity-error
       check-str
       has-field?
       extend
+      update
       to-string
+      to-repr
       nothing
       pyret-true?
-      dummy-loc))
+      dummy-loc
+      loc-list))
   (rename-out [p-pi pi]
               [print-pfun print]
               [tostring-pfun tostring]
+              [torepr-pfun torepr]
               [brander-pfun brander]
               [check-brand-pfun check-brand]
               [keys-pfun prim-keys]
               [num-keys-pfun prim-num-keys]
               [has-field-pfun prim-has-field]
               [raise-pfun raise]
-              [is-nothing-pfun is-nothing]
+              [mk-mutable-pfun mk-mutable]
+              [mk-simple-mutable-pfun mk-simple-mutable]
+              [mk-placeholder-pfun mk-placeholder]
+              [gensym-pfun gensym]
               [p-else else])
   Any
   Number
   String
   Bool
   Object
+  Nothing
   Function
   Method
+  Mutable
+  Placeholder
+  Opaque
+  is-number
+  is-string
+  is-bool
+  is-object
+  is-nothing
+  is-function
+  is-method
+  is-mutable
+  is-placeholder
   nothing)

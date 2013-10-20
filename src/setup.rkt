@@ -6,10 +6,12 @@
 ;; they can be accessed as pure Whalesong files.
 
 (require
+  (only-in racket collection-path)
   racket/pretty
+  "parameters.rkt"
   "library/lang/reader.rkt")
 (provide pre-installer)
-(define LIB-BASE "src/lang/pyret-lib/")
+(define LIB-BASE (collection-file-path "lang/pyret-lib/" "pyret"))
 (define LIB-FILES (list "moorings"))
 (define LIBS
   (map (lambda (p) (build-path LIB-BASE p))
@@ -22,7 +24,9 @@
     (printf "pyret setup: Compiling ~a -> ~a\n" lib-in lib-out)
     (define pyret-file (open-input-file lib-in))
     (define racket-file (open-output-file lib-out #:exists 'replace))
-    (pretty-write (syntax->datum (read-syntax lib-in pyret-file))
-                  racket-file)
+    (parameterize ([current-check-mode #f]
+                   [current-where-everywhere #t])
+      (pretty-write (syntax->datum (read-syntax lib-in pyret-file))
+                    racket-file))
     (close-output-port racket-file)
     (close-input-port pyret-file)))

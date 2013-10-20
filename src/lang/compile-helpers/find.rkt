@@ -53,15 +53,24 @@
      
      [(s-extend l super fields)
       (append (find super matcher) (append* (map find-member fields)))]
+
+     [(s-update l super fields)
+      (append (find super matcher) (append* (map find-member fields)))]
      
      [(s-bracket l obj field)
       (append (find obj matcher) (find field matcher))]
+
+     [(s-get-bang l obj field)
+      (find obj matcher)]
      
      [(s-colon-bracket l obj field)
       (append (find obj matcher) (find field matcher))]
 
      [(s-let l bind expr)
       (find expr matcher)]
+
+     [(s-user-block l body)
+      (find body matcher)]
 
      [(s-var l bind expr)
       (find expr matcher)]

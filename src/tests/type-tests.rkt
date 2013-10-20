@@ -4,7 +4,10 @@
   rackunit
   rackunit/text-ui
   "test-utils.rkt"
-  "../lang/runtime.rkt")
+  "../lang/runtime.rkt"
+  "../lang/string-map.rkt")
+
+(verbose! #f)
 
 (define six (p:mk-num 6))
 (define ten (p:mk-num 10))
@@ -16,11 +19,35 @@
 ;; tests for type annotation runtime checks
 (check-pyret-exn
  "var x :: Number = 'hello'"
- "runtime:")
+ "expected Number")
 
 (check-pyret
  "var x :: String = 'hello' x"
  (p:mk-str "hello"))
+
+(check-pyret-exn
+ "x :: String = {}"
+ "expected String")
+
+(check-pyret-exn
+ "x :: {foo : String} = {}"
+ "missing field foo")
+
+(check-pyret-exn
+ "x :: {foo : String} = {foo: 10}"
+ "expected String")
+
+(check-pyret-exn
+ "x :: {foo : String} = 10"
+ "missing field foo")
+
+(check-pyret
+ "x :: {foo : String} = {foo: 'some string', bar: 10} x.bar"
+ (p:mk-num 10))
+
+(check-pyret
+ "x :: {} = {foo: 'some string'} x.foo"
+ (p:mk-str "some string"))
 
 (check-pyret
  "var x :: list.List = [1]
@@ -32,34 +59,34 @@
   x.first"
  (p:mk-num 1))
 
-(check-pyret-exn "var x :: Number = true" "runtime:")
+(check-pyret-exn "var x :: Number = true" "expected Number")
 (check-pyret "var x :: Number = 48 x" forty8)
-(check-pyret-exn "var x :: Number = 37 x := 'not-a-num'" "runtime:")
+(check-pyret-exn "var x :: Number = 37 x := 'not-a-num'" "expected Number")
 
 (check-pyret "var x :: Number = 23 x := 6" six)
 (check-pyret "fun f(x :: Number) -> String: var y :: String = 'daniel' y end f(42)" (p:mk-str "daniel"))
 (check-pyret-exn "fun f(x :: Number) -> String: var y :: String = 'daniel' y := 6 end f(42)"
-                 "runtime:")
-(check-pyret "var x :: Number = 6 fun f(): var x :: String = 'daniel' x := 'bobby' end f() x"
+                 "expected String")
+(check-pyret "var x :: Number = 6 fun f(): var y :: String = 'daniel' y := 'bobby' end f() x"
              six)
 (check-pyret-exn "var x :: Number = 6 fun f(): x := 'bobby' end f() x"
-                 "runtime:")
+                 "expected Number")
 (check-pyret-exn "fun g(h): h() end var x :: Number = 6 fun f(): x := 'bobby' end g(f) x"
-                 "runtime:")
+                 "expected Number")
 
 (check-pyret-exn
  "fun f(x :: Number) -> String: x.tostring() end
   var g :: (Number -> String) = f
   g := fun(x :: String) -> String: x end
   g('foo')"
- "runtime:")
+ "expected Number")
 
 (check-pyret-exn
  "fun f(x :: Number) -> String: x.tostring() end
   var g :: (String -> String) = f
   g := fun(x :: String) -> String: x end
   g(6)"
- "runtime:")
+ "expected String")
 
 (check-pyret
  "fun f(g :: (Number -> String)): g(10) end
@@ -98,13 +125,13 @@
   "data Maybe(a) | some: value :: a end
   fun f(x :: Maybe<Number>) -> Number: x.value end
   f(some('hello'))"
-  "runtime:")
+  "expected Number")
 
 #;(check-pyret
  "data Maybe(a) | some: value :: a end
   fun f(x :: (Maybe<Number> -> Number)) -> Number: x(some('string')) end
   f(\\m: (m.value))"
- "runtime:")
+ "expected Number")
 
 (check-pyret-exn
  "fun even(x):
@@ -113,8 +140,8 @@
     else: even(x._minus(2))
     end
   end
-  x :: Number(even) = 5"
- "contract failure")
+  y :: Number(even) = 5"
+ "Contract failure")
 
 (check-pyret
  "fun even(x):
@@ -123,7 +150,7 @@
     else: even(x._minus(2))
     end
   end
-  x :: Number(even) = 10 x"
+  y :: Number(even) = 10 y"
  ten)
 
 (check-pyret-exn
@@ -148,7 +175,60 @@
    v2 = variant(10)
    v:meth._fun()(v2,3).meth(1).meth(2).meth(3).x"
    ten)
- 
+
+(check-pyret-exn
+  "x = 5
+   fun f():
+     x = 3
+     x
+   end"
+  "The name x cannot be used in two nested scopes.")
+(check-pyret-exn
+  "x = 5
+   fun f(x):
+     x
+   end"
+  "The name x cannot be used in two nested scopes.")
 ))
+
+(check-pyret-exn
+  "x"
+  "Unbound identifier: x")
+
+(check-pyret-exn
+  "x :: (Number -> String) = 5"
+  "expected (Number -> String)")
+
+(check-pyret
+  "var x :: (Number -> String) = fun(y): 5 end
+   Function(x)"
+  (p:mk-bool #t))
+
+(check-pyret-exn
+  "var f :: (Number -> String) = method(self): end"
+  "expected (Number -> String)")
+
+(check-pyret
+  "cases(list.List<Number>) [1,2]:
+     | empty => list.empty
+     | link(f :: Number, r :: list.List<Number>) => f
+   end"
+  (p:mk-num 1))
+
+(check-pyret-exn
+  "block:
+     x = 10
+     x
+   end
+   x"
+  "Unbound identifier: x")
+
+(check-pyret-exn
+  "block:
+     var x = 10
+     x
+   end
+   x"
+  "Unbound identifier: x")
 
 (run-tests all)

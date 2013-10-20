@@ -6,6 +6,10 @@
   "test-utils.rkt"
   "../lang/runtime.rkt")
 
+(define (wf-check type)
+  (format "where: blocks only allowed on named function declarations and data, not on ~a" type))
+
+
 (define all (test-suite "all"
 
 (check-pyret-exn
@@ -98,8 +102,86 @@
  "Cannot end a block in a fun-binding")
 
 (check-pyret-exn
- "fun: nothing check: 5 + 2 is 7 end"
+ "fun f(): nothing where: 5 + 2 is 7 end"
  "well-formedness:")
+
+;; NOTE(dbp 2013-08-09): The more "obvious" occurence of these two get
+;; caught by typechecking / parsing.
+(check-pyret-exn
+ "check = 1 check"
+ "Cannot use `check` as an identifier.")
+(check-pyret-exn
+ "where = 1 fun(): where end"
+ "Cannot use `where` as an identifier.")
+
+(check-pyret-exn
+ "fun: 1 is 2 end"
+ "Cannot use `is` outside of a `check` or `where` block. Try `==`.")
+
+(check-pyret
+ "fun f(): nothing where: 1 is 2 end 10"
+ (p:mk-num 10))
+
+(check-pyret-exn
+  "fun: 
+    data D:
+      | var1()
+    end
+   end"
+  "Cannot end a block with a data definition")
+
+(check-pyret-exn
+  "fun: 
+    y = 10
+    x = 5
+    fun f(): end
+    data D:
+      | var1()
+    end
+   end"
+  "Cannot end a block with a data definition")
+
+(check-pyret-exn
+  "fun: 
+    y = 10
+    x = 5
+    fun f(): end
+    graph:
+    z = 5
+    end
+   end"
+  "Cannot end a block with a graph definition")
+
+(check-pyret-exn
+  "block:
+    x = 5
+    y = 10
+   end"
+  "Cannot end a block in a let-binding")
+
+(check-pyret-exn
+  "block:
+    x = 5
+    graph: y = 10 end
+   end"
+  "Cannot end a block with a graph definition")
+
+(check-pyret-exn
+  "if x < y:
+    print('x less than y')
+   end"
+  "Cannot have an if with a single branch"
+)
+
+(check-pyret-exn
+  "fun(): where: 5 end"
+  (wf-check "anonymous functions"))
+(check-pyret-exn
+  "method(self): where: 5 end"
+  (wf-check "methods"))
+(check-pyret-exn
+  "{m(self): where: 5 end}"
+  (wf-check "methods"))
 
 ))
 

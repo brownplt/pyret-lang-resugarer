@@ -9,18 +9,18 @@
 
 (set-debug-desugar! #f)
 (set-debug-communication! #f)
-(set-debug-steps! #t)
+(set-debug-steps! #f)
 (set-disable-srclocs! #f)
 
 (provide (rename-out
           [with-resugaring resugarer:with-resugaring]
           [desugar resugarer:desugar]
           [emit resugarer:emit]
+          [emit-first resugarer:emit-first]
           [reconstruct-stack resugarer-test:reconstruct-stack])
          (prefix-out s:
            (combine-out
             (struct-out srcloc)
-            (struct-out info)
             (struct-out Val)
             (struct-out Var)
             (struct-out Func)
@@ -88,12 +88,18 @@
           (rec ((car stk) x) (cdr stk))))
     (rec x stk)))
 
+(define (emit-first x)
+  (let* [[t (reconstruct-stack x)]
+             [u ((unexpand) t (sort t) #f)]]
+    (when (not (CouldNotUnexpand? u))
+      (display (format "\n~a\n" (vary-pretty u 1))))))
+
 (define (display-skip t)
   (when DEBUG_STEPS
-    (display (format "SKIP: ~a\n\n" (pretty t)))))
+    (display (format "-->(SKIP)\n~a\n\n" (vary-pretty t 1)))))
 
 (define (display-step t)
-  (display (format "\n~a\n" (pretty t)))
+  (display (format "\n-->\n~a\n\n" (vary-pretty t 1)))
   (when DEBUG_STEPS (newline)))
     
 
@@ -110,7 +116,6 @@
         (if (CouldNotUnexpand? u) (emit x) (void)))
       (let* [[t (reconstruct-stack x)]
              [u ((unexpand) t (sort t) #f)]]
-        #;(display-step t)
         (if (CouldNotUnexpand? u)
             (display-skip t)
             (display-step u)))))

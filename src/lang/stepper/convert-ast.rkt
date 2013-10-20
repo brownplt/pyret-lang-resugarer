@@ -18,12 +18,12 @@
 (define (string->ast x)
   (aterm->ast (string->aterm x)))
 
-(define (aterm->srcloc s)
+(define (aterm->srcloc s os)
   (match s
     [(Node 'S (list src line col pos span))
-     (srcloc src line col pos span)]
+     (srcloc src line col pos span os)]
     [(Node 'Z (list))
-     (srcloc 'no-info 1 1 1 1)]))
+     (srcloc 'no-info 1 1 1 1 os)]))
 
 (define (srcloc->aterm s)
   (Node 'S (reify-srcloc s)))
@@ -35,13 +35,13 @@
 (define (ast->aterm ast keep-srcloc)
   (define-syntax-rule (node l s xs ...)
     (tagged-node s l (list xs ...)))
-  (define (tagged-node info lbl xs)
-    (when (not (info? info))
-      (error (format "bad info arg: ~a ~a ~a" info lbl xs)))
+  (define (tagged-node s lbl xs)
+    (when (not (srcloc? s))
+      (error (format "bad srcloc arg: ~a ~a ~a" s lbl xs)))
     (let [[srcloc (if keep-srcloc
-                      (srcloc->aterm (info-loc info))
+                      (srcloc->aterm s)
                       (Node 'Z (list)))]
-          [tags (info-tags info)]]
+          [tags (srcloc-tags s)]]
       (if (empty? tags)
           (Node lbl (cons srcloc xs))
           (Tagged tags (Node lbl (cons srcloc xs))))))
@@ -122,8 +122,8 @@
      (node 'CasesElse s (rec x) (rec y) (recs brs) (rec b))]
     [(s-cases-branch s n bs b) 
      (node 'CasesBranch s (show-name n) (recs bs) (rec b))]
-    [(s-data s n ns vs ms b)
-     (node 'Data s (show-name n) (List (map show-name ns)) (recs vs)
+    [(s-data s n ns mxs vs ms b)
+     (node 'Data s (show-name n) (List (map show-name ns)) (recs mxs) (recs vs)
                    (recs ms) (rec b))]
     [(s-variant s n bs ms)
      (node 'Variant s (show-name n) (recs bs) (recs ms))]
@@ -155,7 +155,7 @@
 (define (aterm->ast x [os (list)])
   (define (rec x) (aterm->ast x))
   (define (recs xs) (map rec (List-terms xs)))
-  (define (syn s)  (info (aterm->srcloc s) os))
+  (define (syn s)  (aterm->srcloc s os))
   (define (read-name n) (string->symbol n))
   (define (read-names ns) (map string->symbol (List-terms ns)))
   (define (read-number n) (string->number n))

@@ -1,15 +1,18 @@
 #lang racket/base
 
 (require
-  "runtime.rkt"
+  (except-in "runtime.rkt" gensym)
+  (rename-in "runtime.rkt" [gensym pyret-gensym])
   "eval.rkt"
-  (rename-in pyret/lang/pyret-lib/moorings [%PYRET-PROVIDE moorings]))
+  (except-in "pyret-lang-whalesong.rkt"
+    #%module-begin
+    #%top-interaction
+    #%datum
+    #%top
+    #%app)
 
-(define pyret-list (p:get-field p:dummy-loc moorings "list"))
-(define error (p:get-field p:dummy-loc moorings "error"))
-(define builtins (p:get-field p:dummy-loc moorings "builtins"))
-(define checkers (p:get-field p:dummy-loc moorings "checkers"))
-(define option (p:get-field p:dummy-loc moorings "option"))
+    
+  (rename-in pyret/lang/pyret-lib/moorings [%PYRET-PROVIDE moorings]))
 
 (provide
   #%module-begin
@@ -17,15 +20,14 @@
   #%datum
   #%top
   #%app
-  [prefix-out r: (all-from-out racket/base)]
 
-  [rename-out (pyret-list list)]
-  error
-  builtins
-  checkers
-  option
+  (all-from-out "pyret-lang-whalesong.rkt")
+  
+  (prefix-out r:
+    (combine-out
+      file
+      define-namespace-anchor))
 
-  (all-from-out "runtime.rkt")
   print-pyret
   repl-eval-pyret
   )

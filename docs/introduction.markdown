@@ -1,5 +1,9 @@
 ## Pyret Language Introduction
 
+### Getting Started
+
+You can install Pyret by cloning this repository and running `make`, or `raco setup pyret`, in the repository. You must have Racket >= 5.3.5 installed for this to work. Then put pyret code it `filename.arr` files with `#lang pyret/whalesong` at the top, and run them with `raco pyret /path/to/file.arr`.
+
 ### Basics
 
 #### Hello world
@@ -9,7 +13,7 @@
 Bonus: when you call `print()`, it first calls the builtin
 `tostring()` function on the argument. This shows sensible representations
 for base values, but for more complicated objects, if you define
-a `tostring` method, it will use that instead. 
+a `tostring` method, it will use that instead.
 
 #### Comments
 
@@ -32,7 +36,7 @@ written exactly this way - exactly one space between `else` and `if`.
 
 #### Separators
 
-There are also no line end separators. Pyret is semicolonless. 
+There are also no line end separators. Pyret is semicolonless.
 
 #### Expressions
 
@@ -91,7 +95,7 @@ check for it, and in some cases, like if you have an empty function
 body, it will be returned to you. You can't add fields to it. You write it like:
 
     nothing
-    
+
 #### Objects
 
 Written as dictionary literals, in curly brace syntax. Keys are always
@@ -104,11 +108,16 @@ be written without the quotes or square brackets.
 
 The fields can be accessed with dotted notation, with the same rules
 about square brackets for arbitrary expressions, and identifier-like keys
-written without.
+written without (note: confused about `check`? It's a Pyret language feature,
+explained it detail later in the introduction).
 
-    {foo: 10}.["fo" + "o"] # evaluates to 10
+    check:
+      {foo: 10}.["fo" + "o"] is 10
+    end
 
-    {["foobar"]: 300}.foobar # evaluates to 300
+    check:
+      {["foobar"]: 300}.foobar is 300
+    end
 
 Objects in Pyret are not mutable. To construct a new object with a new or
 changed field from an old object, you use the following notation:
@@ -133,9 +142,12 @@ in other languages) is accessed as the `first` field, and the rest of
 the list (which is another list, potentially empty) is the `rest`
 field.
 
-    [1,2,3].first # evaluates to 1
-    [1,2,3].rest # evaluates to [2,3]
-    [].first # is an error, since the list is empty
+    check:
+      [1,2,3].first is 1
+      [1,2,3].rest  is [2,3]
+      [].first raises "first was not found"
+      link(1,link(2,link(3,empty))) is [1,2,3]
+    end
 
 List notation is actually syntax sugar for a data definition in the Pyret
 standard libraries. `[1,2,3]` is really `link(1,link(2,link(3,empty)))`
@@ -159,7 +171,9 @@ the last statement in the block) is the value that the function returns. For exa
 Functions can be applied with parenthesis and then a comma separated
 list of values.
 
-    (fun(x): x end)(10) # evaluates to 10
+    check:
+      (fun(x): x end)(10) is 10
+    end
 
 Note that parenthesis can be added around any expression to either
 disambiguate (in the case of binary operators), or simply for
@@ -177,7 +191,7 @@ But it might be more confusing. In general though, functions will
 usually be bound to variables or passed as arguments instead of being used
 immediately after construction.
 
-You can (and should) add documentation to your functions. The best way to do that is with `doc`. On the first line of the function, you can write a documentation string. This will be available as the `_doc` attribute on your functions. Also, if you print out a function (or call the `tostring` built-in on it), it will print with the header and the doc string. For example:
+You can (and should) add documentation to your functions. The best way to do that is with `doc`. On the first line of the function, you can write a documentation string. This will be available as the `_doc` attribute on your functions. For example:
 
     fun foo(x):
       doc: "my great foo function!"
@@ -185,15 +199,18 @@ You can (and should) add documentation to your functions. The best way to do tha
       x + y # NOTE: improve!
     end
 
-    print(foo) # prints "fun foo(x): 'my great foo function' end"
+    check:
+      foo._doc is "my great foo function"
+    end
 
 ### Variables, Named Functions and Methods
 
-We can bind any value to a name with `=`. This value cannot be changed
-(though the binding can be shadowed). For example:
+We can bind any value to a name with `=`. This value cannot be changed, and no other bindings with the same name are permitted in the same scope (ie, 'shadowing' is not permitted). For example:
 
     f = fun(x): x end
-    f(10) # evaluates to 10
+    check:
+      f(10) is 10
+    end
 
 Since we often want names for our functions, the following shorthand is possible:
 
@@ -234,7 +251,9 @@ written with the `method` keyword instead of `fun`. An example:
 When a method is put in an object, it can be called as follows:
 
     o = {foo: method(self): 10 end}
-    o.foo()
+    check:
+      o.foo() is 10
+    end
 
 The first argument to the method will be bound to the value of the
 object when it is called - the rest will be what is passed to the
@@ -243,7 +262,9 @@ convention of naming it `self`. Since defining methods in objects is a
 common pattern, we provide shorthand for the previous example:
 
     o = {foo(self): 10 end}
-    o.foo()
+    check:
+      o.foo() is 10
+    end
 
 Given a method, you can get a normal function with the `_fun` method, as follows:
 
@@ -254,13 +275,9 @@ This could then be applied as a normal function, passing in a value for `self`:
 
     m = method(self): 10 end
     f = m._fun()
-    f({bar: 20}) # evaluates to 10
-
-Methods can also have doc strings, like functions, and they also print them out when
-you call `tostring()` on them. For example:
-
-    o = {foo(self): doc: "This function needs help..." 10 end}
-    tostring(o.foo) # evaluates to "method foo(self): 'This function needs help...' end"
+    check:
+      f({bar: 20}) is 10
+    end
 
 Finally, if you want to just get out the raw method value (this also
 will get out any other raw value, but as of now, methods are the only
@@ -268,15 +285,22 @@ things that are treated specially), you can access fields with
 colon. For example:
 
     o = { foo(self): 10 end, b: 20 }
-    o:b == o.b # is true - there isn't anything special about non-methods
+    check:
+      o:b is o.b
+    end
     m = o:foo
-    m() # an error - can't apply bare methods
+    check:
+      m() raises ""
+    end
     f = m._fun()
-    f({}) # evaluates to 10 - note that you have to apply it to a self
-    o2 = o.{ newmeth = m }
-    o2.newmeth() # evaluates to 10 - because now we accessed it with normal dot.
-    
-    
+    check:
+      f({}) is 10 # note that you have to apply it to a self
+    end
+    o2 = o.{ newmeth: m }
+    check:
+      o2.newmeth() is 10 # because now we accessed it with normal dot.
+    end
+
 ### Operators
 
 Pyret does not have precedence for operators. The result is not
@@ -313,9 +337,9 @@ built in numbers:
     <
 
 Furthermore, like with equality, we support using math operators on your own
-data types - any object that defines a "_plus" can be used with `+`, similar
+data types - any object that defines a `_plus` can be used with `+`, similar
 for `_minus`, `_divide`, `_times`, `_lessequal`, `_greaterequal`, `_greaterthan`,
-`_lessthan`. 
+`_lessthan`.
 
 #### Boolean
 
@@ -330,7 +354,7 @@ to call the function or not). For example:
     true and true and false # evaluates to false
     true and (false or true) # evaluates to true
     not (true and false) # evaluates to true
-    
+
 ### Control
 
 #### For loops
@@ -341,41 +365,52 @@ running some block of code to produce a new value for each existing value, we ca
     x = for map(elem from [1,2,3,4]):
       elem + 2
     end
-    # x is [3,4,5,6]
+    check:
+     x is [3,4,5,6]
+    end
 
 There are also several other built in functions for this purpose:
 
-    x = for filter(elem from [1,2,3,4])
+    z = for filter(elem from [1,2,3,4]):
       elem < 3
     end
-    # x is [1,2]
+    check:
+     z is [1,2]
+    end
 
     y = for fold(sum from 0, elem from [1,2,3]):
       sum + elem
     end
-    # y is 6
+    check:
+     y is 6
+    end
 
 And you are free to define your own `for` operators - they are functions that take
 as their first arguments a function with the argument names from the left side of
 the `from` clauses and has the body of the `for` block, and then the rest of
 the arguments are the values from the right side of the `from` clauses. For example:
 
-    fun every-other(body-fun, lst):
-      fun every-other-internal(flip, lst):
-        case(List) lst:
+    fun keep-every-other(body-fun, l):
+      fun iter(flip, lst):
+        cases(List) lst:
           | empty => empty
-          | link(first, rst) =>
-            link(if flip: body-fun(first) else: first end,
-                 iter-alternating-internal(not flip, rst))
-        end
+	  | link(first, rst) =>
+	    if flip:
+	      link(body-fun(first), iter(not flip, rst))
+		      else:
+	      iter(not flip, rst)
+	    end
+	end
       end
-      iter-every-other-internal(true, lst)
+      iter(true, l)
     end
 
-    for every-other(elt from range(0,10)):
-      print(elt)
+    w = for keep-every-other(elt from range(0,10)):
+      elt + 1
     end
-    # prints 0, 2, 4, 6, 8, 10
+    check:
+      w is [1, 3, 5, 7, 9]
+    end
 
 #### If
 
@@ -393,7 +428,7 @@ cause side effects, write a `when` block instead. A few examples:
     end
 
     if false:
-      # ...
+      # this is a runtime error, you need an else branch
     end
 
     if true and false:
@@ -420,7 +455,7 @@ raised will be bound to the identifier inside the `except` clause. For example:
 
     try:
       10
-      raise "Help"
+      raise("Help")
       20 # control never reaches here
     except(e):
       e # is "Help"
@@ -433,16 +468,16 @@ hit the first one available. For example:
     try:
       try:
         10
-        raise "Help"
+        raise("Help")
         20 # control never reaches here
       except(e):
         e # is "Help"
       end
     except(e):
-      # control never reaches here 
+      # control never reaches here
     end
 
-    
+
 #### Blocks
 
 There are many block forms in Pyret. In any block, any number of
@@ -458,11 +493,11 @@ blocks are:
 - inside `when`
 - between `try` and `except`, and `except` and `end`
 - in the branches of `cases`
-    
+
 ### Data
 
 Pyret supports variant data types. This means that a single type may have
-several examples of it, with different constructors. 
+several examples of it, with different constructors.
 
 #### Definitions
 
@@ -500,9 +535,9 @@ same methods on all variants, because using them might be hard! Here are
 examples of the two ways:
 
     data List:
-      | empty with
+      | empty with:
         length(self): 0 end
-      | link(first, rest) with
+      | link(first, rest) with:
         length(self): 1 + self.rest.length() end
     sharing:
       my-special-method(self):
@@ -551,33 +586,34 @@ your variants, either include an `else` or be sure that only the
 variants listed will ever be passed in.
 
 
-### Check blocks
+### Check/where blocks
 
-One of the more interesting features of Pyret is the `check` block. At
-the end of any function or data definition, or in any block, you can
-add a `check` block, which contains code that asserts various
-properties about the function or data definition (or just tests things
-in general). If you run Pyret in `check` mode, we run these
-blocks. The novel feature is that you can put `check` blocks on nested
-functions, and they will be run with the arguments to the outer
-function from outer `check` blocks, which allows sensible testing of
-nested functions. For example:
+One of the more interesting features of Pyret are it's `check` and
+`where` blocks. At the end of any function or data definition, or in
+any block, you can add a `where` block, which contains code that
+asserts various properties about the function or data definition (or
+just tests things in general). You can put a `check` block anywhere,
+not attached to a particular function or data definition. If you run
+Pyret in `check` mode, we run these blocks. The novel feature is that
+you can put `where` blocks on nested functions, and they will be run
+with the arguments to the outer function from outer `where` blocks,
+which allows sensible testing of nested functions. For example:
 
     fun fact(n):
-      fun fact_(n, acc):
-        if n <= 1:
+      fun fact_(n1, acc):
+        if n1 <= 1:
           acc
         else:
-          fact_(n - 1, acc * n)
+          fact_(n1 - 1, acc * n1)
         end
-      check:
+      where:
         fact_(0, 0) is 0
         fact_(n, 0) is 0
         fact_(3, 3) is 18
         fact_(5, 1) is 120
       end
       fact_(n, 1)
-    check:
+    where:
       fact(1) is 1
       fact(5) is 120
       fact(3) is 6
@@ -589,6 +625,12 @@ sense in the context of outer data, and setting up testing harnesses
 can be really hard. In this case, the inner data is provided by the
 outer tests (so the inner check block runs 3 times, once each with `n`
 defined as 1, 5, and 3).
+
+`check` blocks can go anywhere, like:
+
+    check:
+      (1 + 1) is 2
+    end
 
 ### Annotations
 
@@ -623,12 +665,12 @@ You can also define arbitrary predicates. For example:
       if n == 0:
         []
       else:
-        link(e, replicate(n - 1))
+        link(e, replicate(n - 1, e))
       end
     end
 
 And if you were to call `replicate` with a negative number, it would
-not run (instead of running forever).      
+not run (instead of running forever).
 
 
 ### Brands
@@ -646,7 +688,7 @@ way and didn't want to have to re-run it, you could write code like:
       #...
       verified.brand(x)
     end
-    
+
     fun run(x):
       if not verified.test(x):
         foo(expensive-check(x))
@@ -659,11 +701,10 @@ way and didn't want to have to re-run it, you could write code like:
     z = expensive-check([])
 
     run(y) # runs expensive-check
-    run(z) # doesn't run expensive-check  
+    run(z) # doesn't run expensive-check
 
 Note that since objects are not mutable, the `.brand` method returns a
 new object with the brand added. You are welcome to use `brander`s for
 whatever you want - we think they are an interesting pattern for
 controlling a certain kind of truth within a program (of which a type
 is just one example).
-

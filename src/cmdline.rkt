@@ -2,22 +2,24 @@
 
 (require
   pyret/lang/ffi-helpers
-  pyret/lang/settings
   pyret/lang/pyret
   (only-in pyret/lang/pyret-lang-racket checkers)
+  pyret/lang/reader
   pyret/lang/runtime
   pyret/lang/typecheck
   pyret/lang/well-formed
+  pyret/lang/indentation
   pyret/lang/eval
+  pyret/parameters
   ragg/support
   racket/cmdline
   racket/list
   racket/match
   racket/pretty
   racket/runtime-path
-  ;"lang/reader.rkt"
-  ;"lang/ast.rkt"
-  racket/syntax)
+  racket/syntax
+  srfi/13
+  "parameters.rkt")
 
 (provide (all-defined-out))
 
@@ -60,6 +62,10 @@
      (eprintf "[pyret] Error in well-formedness checking:\n\n~a\n" message)
      (eprintf "\nAt:\n")
      (void (map print-loc srclocs))]
+    [(exn:fail:pyret/indent message cms srclocs)
+     (eprintf "[pyret] Error in indentation checking:\n\n~a\n" message)
+     (eprintf "\nAt:\n")
+     (void (map print-loc srclocs))]
     [(p:exn:fail:pyret message cms srcloc system? val)
      (eprintf "[pyret] Runtime error:\n\n~a\n" message)
      (eprintf "At:\n")
@@ -74,6 +80,15 @@
      (eprintf "~a\n" message)]
     [(exn:fail message cms)
      (cond
+      [(string-contains message "default-load-handler: expected a `module' declaration")
+       (display "This file doesn't look right.  Did you forget #lang pyret/check, #lang pyret, or #lang pyret/whalesong at the top of the file?\n")
+       (display message)
+       (newline)]
+      [(string-contains message "PYRET-PROVIDE")
+       (display "It looks like you tried to import a file that lacks a provide statement.  The file is listed in the error message below:\n")
+       (newline)
+       (display message)
+       (newline)]
       [(exn:srclocs? p)
        (define locs ((exn:srclocs-accessor p) p))
        (eprintf "[pyret]\n~a\n" message)
@@ -89,12 +104,11 @@
        (display "\n\nPlease copy/paste this exception in an email to joe@cs.brown.edu.\n")])]
     ))
 
-(define (print-check-results results)
-  ((p:p-base-method (p:get-raw-field p:dummy-loc results "format")) results))
 (error-display-handler process-pyret-error)
 
 (define check-mode #t)
 (define resugar-mode #f)
+(define mark-mode #f)
 (command-line
   #:once-each
   ("--print-racket" path "Print a compiled Racket program on stdout"
@@ -104,6 +118,16 @@
    (set! check-mode #f))
   ("--trace" "Show evaluation steps via resugaring"
    (set! resugar-mode #t))
+  ("--show-marks" "Mark all call frames"
+   (set! mark-mode #t))
+  ("--no-marks" "Do not mark call frames"
+   (set! mark-mode #f))
+  ("--no-indentation" "Run without indentation checking"
+   (current-indentation-mode #f))
+  ("--allow-shadow" "Run without checking for shadowed vars"
+   (current-allow-shadowed-vars #t))
+  ("--print-desugared" "Print code after desugaring"
+   (current-print-desugared #t))
   #:args file-and-maybe-other-stuff
   (when (> (length file-and-maybe-other-stuff) 0)
     (define pyret-file (simplify-path (path->complete-path (first file-and-maybe-other-stuff))))
@@ -111,19 +135,19 @@
     (define (run)
       (cond
         [resugar-mode
-         (parameterize ([param-compile-resugar-mode #t])
+         (parameterize ([current-mark-mode mark-mode]
+                        [current-resugar-mode #t]
+                        [current-compile-lift-constants #f])
            (dynamic-require pyret-file #f))]
         [check-mode
-         (parameterize ([param-compile-check-mode #t]
-                        [current-load-relative-directory base])
-           (define results
-            (eval
-              (pyret->racket pyret-file (open-input-file pyret-file)
-                             #:check #t)
-              (make-fresh-namespace)))
-           (print-check-results results))]
+         (parameterize ([current-check-mode #t]
+                        [current-mark-mode mark-mode]
+                        [current-print (print-pyret #t)]
+                        [current-whalesong-repl-print #f])
+          (dynamic-require pyret-file #f))]
         [else
-         (dynamic-require pyret-file #f)]))
+         (parameterize ([current-mark-mode mark-mode])
+           (dynamic-require pyret-file #f))]))
     (with-handlers
       ([exn:break?
         (lambda (e)
@@ -131,4 +155,3 @@
           (flush-output (current-output-port))
           (flush-output (current-error-port)))])
       (run))))
-

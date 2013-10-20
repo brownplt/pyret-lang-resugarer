@@ -1,7 +1,13 @@
 *compiled/
 *~
 *.swp
-*.html
-*.js
-*.css
+*.swo
+*.out
+docs/*.html
+docs/*.css
+docs/*.js
+docs/lang/*
 src/lang/pyret-lib/moorings.rkt
+../js/test-runner/tests.js
+*#
+pyret.plt
