@@ -7,7 +7,7 @@
 ; debugging:
 (require "../desugar.rkt")
 
-(set-debug-desugar! #f)
+(set-debug-desugar! #t)
 (set-debug-communication! #f)
 (set-debug-steps! #f)
 (set-disable-srclocs! #f)
@@ -65,7 +65,7 @@
              (send-command (format "desugar ~a ~a\n" sort (ast->string t)) out)
              (if DEBUG_DESUGAR
                  (let [[response (receive-response in err)]]
-                   (display (format "desugaring...\n  --std-->\n~a\n f --new-->\n~a\n\n" (pretty (desugar-pyret t)) (pretty response)))
+                   (display (format "desugaring...\n  --std-->\n~a\n --new-->\n~a\n\n" (pretty (desugar-pyret t)) (pretty response)))
                    response)
              (receive-response in err)))]
            [unexpand (λ (t sort [keep-srclocs? #t])

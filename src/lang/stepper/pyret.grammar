@@ -243,6 +243,11 @@ rules
   LeftApp(s, target, fun, [args ...]) ->
     App(s, fun, [target, args ...]);
 
+  (* Incomplete w.r.t. type params *)
+  Fun(s, name, typarams, args, ann, doc, body, check) ->
+    Let(s, Bind(s, name, ABlank),
+      Lam(s, typarams, args, ann, doc, body, check));
+
   (*
   Prog(s, imps, block) ->
     Prog(s, imps

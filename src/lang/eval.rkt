@@ -56,9 +56,10 @@
                               well-formed-stx))
   (define desugared (desugar indentation-stx))
   (define type-checked
-    (if type-env
-        (contract-check-pyret desugared type-env)
-        desugared))
+    (cond
+      [resugar-mode desugared]
+      [type-env (contract-check-pyret desugared type-env)]
+      [else desugared]))
   (when print-desugared
       (printf "\n[pyret desugared]\n\n~a\n\n[code running follows]\n\n" (pretty type-checked)))
   (define compiled (compile type-checked))

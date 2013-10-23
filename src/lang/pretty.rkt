@@ -47,7 +47,8 @@
     (spaces
      (if (empty? params) #f (angles (comma-sep (map pretty params))))
      (concat name
-             (parens (comma-sep (map pretty args))))
+             (parens (comma-sep (map pretty args)))
+             ":")
      (pretty-return-ann ann)))
 
   (define (pretty-method-header args ann)
@@ -92,7 +93,14 @@
          (list (pretty-implicit-block block))))]
     
     [(s-block _ stmts)
-     (apply newlines (cons "block:" (map indented (map prettier stmts))))]
+          (apply newlines (append (list "block:")
+                             (map indented (map prettier stmts))
+                             (list "end")))]
+    
+    [(s-user-block _ stmts)
+     (apply newlines (append (list "block:")
+                             (map indented (map prettier stmts))
+                             (list "end")))]
     
     [(s-let _ bnd val)
      (format "~a = ~a" (pretty bnd) (pretty val))]
@@ -106,23 +114,23 @@
          (format "~a :: ~a" (pretty id) (pretty-ann ann)))]
     
     [(s-fun _ name params args ann doc body check)
-     (newlines (format "fun ~a:" (pretty-fun-header name params args ann))
+     (newlines (format "fun ~a:" (pretty-fun-header (symbol->string name) params args ann))
                (indented (pretty-doc doc))
-               (indented (prettier body))
+               (indented (prettier-implicit-block body))
                (pretty-check check)
                "end")]
     
     [(s-method _ args ann doc body check)
      (newlines (format "method~a:" (pretty-method-header args ann))
                (indented (pretty-doc doc))
-               (indented (prettier body))
+               (indented (prettier-implicit-block body))
                (indented (prettier check))
                "end")]
     
     [(s-lam _ params args ann doc body check)
      (spaces (pretty-fun-header "fun" params args ann)
              (pretty-doc doc)
-             (prettier body)
+             (prettier-implicit-block body)
              (pretty-check check)
              "end")]
     
@@ -222,6 +230,7 @@
 (define (show-pyret-val x)
   (format "<~a>"
           (cond [(procedure? x) "proc"]
+                [(struct? x) "obj"]
                 [else (to-string x)])))
 
 (define (pretty-ann ann)
