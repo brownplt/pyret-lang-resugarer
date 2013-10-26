@@ -137,7 +137,8 @@
         [resugar-mode
          (parameterize ([current-mark-mode mark-mode]
                         [current-resugar-mode #t]
-                        [current-compile-lift-constants #f])
+                        [current-compile-lift-constants #f]
+                        [current-allow-shadowed-vars #t])
            (dynamic-require pyret-file #f))]
         [check-mode
          (parameterize ([current-check-mode #t]

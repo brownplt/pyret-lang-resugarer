@@ -19,13 +19,6 @@
 (define (string->ast x)
   (aterm->ast (string->aterm x)))
 
-(define (aterm->srcloc s os)
-  (match s
-    [(Node 'S (list src line col pos span))
-     (srcloc src line col pos span os)]
-    [(Node 'Z (list))
-     (srcloc 'no-info 1 1 1 1 os)]))
-
 (define (srcloc->aterm s)
   (Node 'S (reify-srcloc s)))
 
@@ -33,15 +26,19 @@
   (define-syntax-rule (node l s xs ...)
     (tagged-node s l (list xs ...)))
   (define (tagged-node s lbl xs)
+    (let [[srcloc (make-srcloc s)]]
+      (attach-tags s srcloc (Node lbl (cons srcloc xs)))))
+  (define (make-srcloc s)
     (when (not (srcloc? s))
-      (error (format "bad srcloc arg: ~a ~a ~a" s lbl xs)))
-    (let [[srcloc (if keep-srcloc
-                      (srcloc->aterm s)
-                      (Node 'Z (list)))]
-          [tags (srcloc-tags s)]]
+      (error (format "bad srcloc arg: ~a" s)))
+    (if keep-srcloc
+        (srcloc->aterm s)
+        (Node 'Z (list))))
+  (define (attach-tags s srcloc x)
+    (let [[tags (srcloc-tags s)]]
       (if (empty? tags)
-          (Node lbl (cons srcloc xs))
-          (Tagged tags (Node lbl (cons srcloc xs))))))
+          x
+          (Tagged tags x))))
   (define (rec x) (ast->aterm x keep-srcloc))
   (define (recs xs) (List (map rec xs)))
   (define (show-name x)
@@ -50,8 +47,12 @@
         (format "[?~a?]" x))
     #;(symbol->string x)) ;TODO(justin)
   (define (show-number x) (number->string x))
-  (define (stmt s x) (if (not (s-stmt? x))
-                         (Node 'Expr (list (rec x))) (rec x)))
+  (define (stmt s x)
+    (let [[srcloc (make-srcloc s)]]
+      (attach-tags s srcloc
+                   (if (not (s-stmt? x))
+                       (Node 'Expr (list (rec x)))
+                       (rec x)))))
   (define (stmts s xs) (map (λ (x) (stmt s x)) xs))
   
   (match ast
@@ -104,6 +105,7 @@
     [(s-provide-all s)   (node 'ProvideAll s)]
     ; Statements
     [(s-block s ss)      (node 'Block s (List (stmts s ss)))]
+    [(s-check s ss)      (node 'Check s (List (stmts s ss)))]
     [(s-fun s n ns bs a str check body)
      (node 'Fun s (show-name n) (List (map show-name ns)) (recs bs)
                   (rec a) str (rec check) (rec body))]
@@ -133,6 +135,7 @@
     ; Expressions
     [(s-op s op x y)
      (node 'Op s (hash-ref reverse-op-lookup-table op) (rec x) (rec y))]
+    [(s-user-block s ss)     (node 'UserBlock s (recs ss))]
     [(s-not s x)             (node 'Not s (rec x))]
     [(s-paren s x)           (node 'Paren s (rec x))]
     [(s-app s x xs)          (node 'App s (rec x) (recs xs))]
@@ -144,12 +147,20 @@
     [(s-colon-bracket s x y) (node 'ColonBracket s (rec x) (rec y))]
     [(s-for s x bs a b)      (node 'For s (rec x) (recs bs) (rec a) (rec b))]
     [(s-for-bind s b x)      (node 'ForBind s (rec b) (rec x))]
+    [(s-graph s xs)          (node 'Graph s (recs xs))]
     [(s-extend s x ms)       (node 'Extend s (rec x) (recs ms))]
+    [(s-update s x fs)       (node 'Update s (rec x) (recs fs))]
     ; Runtime values
     [x                       (Node 'Value (list (pyret-to-string x)))]))
 
 
 (define (aterm->ast x [os (list)])
+  (define (aterm->srcloc s os)
+    (match s
+      [(Node 'S (list src line col pos span))
+       (srcloc src line col pos span os)]
+      [(Node 'Z (list))
+       (srcloc 'no-info 1 1 1 1 os)]))
   (define (rec x) (aterm->ast x))
   (define (recs xs) (map rec (List-terms xs)))
   (define (syn s)  (aterm->srcloc s os))
@@ -165,6 +176,7 @@
     [(Node 'List (list s xs))      (s-list (syn s) (recs xs))]
     [(Node 'Id (list s n))         (s-id (syn s) (read-name n))]
     [(Node 'Num (list s n))        (s-num (syn s) (read-number n))]
+    [(Node 'Int (list s n))        (s-num (syn s) n)]
     [(Node 'True (list s))         (s-bool (syn s) #t)]
     [(Node 'False (list s))        (s-bool (syn s) #f)]
     [(Node 'Str (list s str))      (s-str (syn s) str)]
@@ -197,6 +209,7 @@
     [(Node 'ProvideAll (list s))  (s-provide-all (syn s))]
     ; Statements
     [(Node 'Block (list s ss))     (s-block (syn s) (recs ss))]
+    [(Node 'Check (list s ss))     (s-check (syn s) (recs ss))]
     [(Node 'Expr (list x))         (rec x)]
     [(Node 'Fun (list s n ns bs a str check body))
      (s-fun (syn s) (read-name n) (read-names ns)
@@ -227,6 +240,7 @@
     ; Expressions
     [(Node 'Op (list s op x y))
      (s-op (syn s) (hash-ref op-lookup-table op) (rec x) (rec y))]
+    [(Node 'UserBlock (list s ss)) (s-user-block (syn s) (recs ss))]
     [(Node 'Not (list s x))        (s-not (syn s) (rec x))]
     [(Node 'Paren (list s x))      (s-paren (syn s) (rec x))]
     [(Node 'App (list s x xs))     (s-app (syn s) (rec x) (recs xs))]
@@ -238,7 +252,9 @@
     [(Node 'ColonBracket (list s x y)) (s-colon-bracket (syn s) (rec x) (rec y))]
     [(Node 'For (list s x bs a b)) (s-for (syn s) (rec x) (recs bs) (rec a) (rec b))]
     [(Node 'ForBind (list s b x))  (s-for-bind (syn s) (rec b) (rec x))]
-    [(Node 'Extend (list s x ms))  (s-extend (syn s) (rec x) (recs ms))]))
+    [(Node 'Graph (list s xs))     (s-graph (syn s) (recs xs))]
+    [(Node 'Extend (list s x ms))  (s-extend (syn s) (rec x) (recs ms))]
+    [(Node 'Update (list s x fs))  (s-update (syn s) (rec x) (recs fs))]))
     
 
 (define (aterm->string t)
@@ -339,4 +355,3 @@
 
 (define (test-conversion x)
   (check-equal? x (string->ast (ast->string x))))
-

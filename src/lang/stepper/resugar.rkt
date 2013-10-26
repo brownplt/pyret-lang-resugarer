@@ -4,6 +4,7 @@
 (require "convert-ast.rkt")
 (require "../ast.rkt")
 (require "../pretty.rkt")
+(require racket/runtime-path)
 ; debugging:
 (require "../desugar.rkt")
 
@@ -53,11 +54,11 @@
           [(strip-prefix "error: " response)
            => (λ (msg) (error msg))])))
 
-(define-syntax-rule (with-resugaring dir expr exprs ...)
+(define-runtime-path cmd-file "Resugarer")
+(define-runtime-path grammar-file "pyret.grammar")
+(define-syntax-rule (with-resugaring expr exprs ...)
   (begin
     (current-locale "en_US.UTF-8") ; How to make Racket read in unicode?
-    (let [[cmd-file (string-append dir "/Resugarer")]
-          [grammar-file (string-append dir "/pyret.grammar")]]
     (let-values [[(resugarer in out err)
                   (subprocess #f #f #f cmd-file grammar-file)]]
       (parameterize
@@ -73,7 +74,7 @@
              (receive-response in err))]]
         (let [[result (begin expr exprs ...)]]
           (subprocess-kill resugarer #t)
-          result))))))
+          result)))))
 
 (define (desugar dir sort ast)
   (with-resugaring dir ((expand) ast sort)))

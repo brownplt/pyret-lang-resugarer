@@ -3,12 +3,11 @@ core
 
 	S : String * Int * Int * Int * Int -> S;
     Z : S;
-	Expr : Expr -> Stmt;
     Value : String -> Expr;
 
-	List : S * [Expr] -> Expr;
 	Id : S * String -> Expr;
 	Num : S * String -> Expr;
+    IntNum : S * Int -> Expr;
 	True : S -> Expr;
 	False : S -> Expr;
 	Str : S * String -> Expr;
@@ -38,6 +37,7 @@ core
   constructors
 
     Prog : S * [Header] * Expr -> Prog;
+	Expr : Expr -> Stmt;
 
 
     # Headers #
@@ -45,12 +45,12 @@ core
     ImportString : S * String * String -> Header;
 	ImportSymbol : S * String * String -> Header;
 	Provide : S * Expr -> Header;
-	ProvideAll : S -> Header;
 
 
     # Statements #
 
 	Block : S * [Stmt] -> Expr;
+    Check : S * [Stmt] -> Stmt;
 
 	Fun : S * String * [String] * [Bind] * Ann * String * Expr * Expr -> Stmt;
 	Var : S * Bind * Expr -> Stmt;
@@ -71,8 +71,12 @@ core
 	DataField : S * Expr * Expr -> Member;
 	MethodField : S * Expr * [Bind] * Ann * String * Expr * Expr -> Member;
 
+	List : S * [Expr] -> Expr;
+
 
     # Expressions #
+
+    UserBlock : S * [Stmt] -> Expr;
 
 	App : S * Expr * [Expr] -> Expr;
 	LeftApp : S * Expr * Expr * [Expr] -> Expr;
@@ -88,7 +92,7 @@ core
 	ForBind : S * Bind * Expr -> ForBind;
 
 	Extend : S * Expr * [Member] -> Expr;
-
+    Update : S * Expr * [Member] -> Expr;
 
 
 
@@ -98,12 +102,11 @@ surface
 
     S : String * Int * Int * Int * Int -> S;
     Z : S;
-	Expr : Expr -> Stmt;
     Value : String -> Expr;
 
-	List : S * [Expr] -> Expr;
 	Id : S * String -> Expr;
 	Num : S * String -> Expr;
+    IntNum : S * Int -> Expr;
 	True : S -> Expr;
 	False : S -> Expr;
 	Str : S * String -> Expr;
@@ -132,6 +135,7 @@ surface
 
     # Temporaries #
 
+    BuildLocation : S -> Expr;
 #    ReplaceTyparams : [String] * Ann -> Ann;
 #    LookupOp : String -> OpName;
 #    FlattenBlocks : [Block] -> Block;
@@ -140,6 +144,7 @@ surface
   constructors
 
     Prog : S * [Header] * Expr -> Prog;
+	Expr : Expr -> Stmt;
 
 
     # Headers #
@@ -178,6 +183,8 @@ surface
 
     # Expressions #
 
+    UserBlock : S * [Stmt] -> Expr;
+
 	Paren : S * Expr -> Expr;
 	
 	Not : S * Expr -> Expr;
@@ -192,23 +199,91 @@ surface
 	Colon : S * Expr * String -> Expr;
 	ColonBracket : S * Expr * Expr -> Expr;
 
+	Extend : S * Expr * [Member] -> Expr;
+    Update : S * Expr * [Member] -> Expr;
+
 	For : S * Expr * [ForBind] * Ann * Expr -> Expr;
 	ForBind : S * Bind * Expr -> ForBind;
 
-	Extend : S * Expr * [Member] -> Expr;
+	List : S * [Expr] -> Expr;
+
+    Graph : S * [Expr] -> Stmt;
+
 
 
 rules
+
+
+  (* src might be serialized differently *)
+  BuildLocation(S(src, line, col, pos, span)) ->
+    App(S(src, line, col, pos, span),
+     Bracket(S(src, line, col, pos, span),
+       Id(S(src, line, col, pos, span), "error"),
+         Str(S(src, line, col, pos, span), "location")),
+     [Str(S(src, line, col, pos, span), src),
+      IntNum(S(src, line, col, pos, span), line),
+      IntNum(S(src, line, col, pos, span), col)]);
+
+  (* ImportSymbol: performs string-manipulation *)
+  (* ProvideAll: non-compositional; traverses program body *)
+  (* Block: flattens blocks together *)
+
+  (* Incomplete w.r.t. type params (Pyret weirdness) *)
+  Fun(s, name, typarams, args, ann, doc, body, check) ->
+    Let(s, Bind(s, name, ABlank),
+      Lam(s, typarams, args, ann, doc, body, check));
+
+  Check(s, body) -> Expr(Id(s, "nothing"));
+
+  (* Graph: complicated *)
+
+  When(s, test, body) ->
+    Expr(IfElse(s, [IfBranch(s, test, body)],
+          Block(s, [Expr(Id(s, "p:nothing"))])));
 
   If(s, branches) ->
     IfElse(s, branches, Block(s,
       [Expr(App(s, Id(s, "raise"),
 	         [Str(s, "if: no tests matchedq")]))]));
-  Not(s, e) -> App(s, Bracket(s, e, Str(s, "_not")), []);
-  # Opis: uses pretty
+
+  (* Try: not idempotent, uses gensym *)
+
+  Cases(s, type, val, cases) ->
+    CasesElse(s, type, val, cases,
+      Block(s, [Expr(App(s, Id(s, "raise"),
+                     [Str(s, "cases: no cases matched")]))]));
+
+  (* GENSYM should be gensymmed; some srclocs should be extracted *)
+  CasesElse(s, type, val, [CasesBranch(s2, name, args, body) ...], else) ->
+    Block(s, [Let(s, Bind(s, "GENSYM_temp", type), val),
+              Expr(App(s, Dot(s, Id(s, "GENSYM_temp"), "_match"),
+                   [Obj(s, [DataField(s2, Str(s2, name),
+                             Lam(s2, [], args, ABlank, "",
+                                 body, Block(s2, []))) ...]),
+                    Lam(s, [], [], ABlank, "", else, Block(s, []))]))]);
+
+  For(s, iter, [ForBind(s2, bs, es) ...], ann, body) ->
+    App(s, iter, [Lam(s, [], [bs ...], ann, "", body, Block(s, [])),
+                  es ...]);
+  
+  (* Uses pretty *)
   Op(s, "is", x, y) ->
-    App(s, Bracket(s, Id(s, "checkers"), Str(s, "check-equals")),
-      [Str(s, "--is--"), x, y]);
+    App(s, Bracket(s, Id(s, "checkers"), Str(s, "check-is")),
+      [Str(s, "--is-check--"),
+       Lam(s, [], [], ABlank, "", x, Block(s, [])),
+       Lam(s, [], [], ABlank, "", y, Block(s, [])),
+       BuildLocation(s)]);
+
+  (* Uses pretty *)
+  Op(s, "raises", x, y) ->
+    App(s, Bracket(s, Id(s, "checkers"), Str(s, "check-raises")),
+      [Str(s, "--raises-check--"),
+       Lam(s, [], [], ABlank, "", x, Block(s, [])),
+       y,
+       BuildLocation(s)]);
+
+  (* No support for '_' syntax *)
+  Not(s, e) -> App(s, Bracket(s, e, Str(s, "_not")), []);
   Op(s, "==", x, y) ->
     App(s, Bracket(s, Id(s, "builtins"), Str(s, "equiv")), [x, y]);
   Op(s, "<>", x, y) ->
@@ -220,6 +295,20 @@ rules
     App(s, Bracket(s, x, Str(s, "_and")),
            [Lam(s, [], [], ABlank, "", y, Block(s, []))]);
   Op(s, "+", x, y)  -> App(s, Bracket(s, x, Str(s, "_plus")), [y]);
+  # Op(s, "+", x, y) ->
+  #   App(s, Lam(s, [], [Bind(s, "%op_temp1", ABlank),
+  #                      Bind(s, "%op_temp2", ABlank)], ABlank, "",
+  #              App(s, Bracket(s, Id(s, "%op_temp1"), Str(s, "_plus")),
+  #                  [Id(s, "%op_temp2")]),
+  #              Block(s, [])),
+  #     [x, y]);
+  # Op(s, "*", x, y) ->
+  #   App(s, Lam(s, [], [Bind(s, "%op_temp1", ABlank),
+  #                      Bind(s, "%op_temp2", ABlank)], ABlank, "",
+  #              App(s, Bracket(s, Id(s, "%op_temp1"), Str(s, "_times")),
+  #                  [Id(s, "%op_temp2")]),
+  #              Block(s, [])),
+  #     [x, y]);
   Op(s, "-", x, y)  -> App(s, Bracket(s, x, Str(s, "_minus")), [y]);
   Op(s, "*", x, y)  -> App(s, Bracket(s, x, Str(s, "_times")), [y]);
   Op(s, "/", x, y)  -> App(s, Bracket(s, x, Str(s, "_divide")), [y]);
@@ -227,64 +316,16 @@ rules
   Op(s, "<", x, y)  -> App(s, Bracket(s, x, Str(s, "_lessthan")), [y]);
   Op(s, ">=", x, y) -> App(s, Bracket(s, x, Str(s, "_greaterequal")), [y]);
   Op(s, ">", x, y)  -> App(s, Bracket(s, x, Str(s, "_greaterthan")), [y]);
+
+  Paren(s, x) -> x;
+
+  LeftApp(s, target, fun, [args ...]) ->
+    App(s, fun, [target, args ...]);
+
   List(s, []) -> Bracket(s, Id(s, "list"), Str(s, "empty"));
   List(s, [elt, elts ...]) ->
     App(s, Bracket(s, Id(s, "list"), Str(s, "link")),
       [elt, List(s, [elts ...])]);
-  When(s, test, body) ->
-    Expr(IfElse(s, [IfBranch(s, test, body)],
-          Block(s, [Expr(Id(s, "p:nothing"))])));
+
   Dot(s, val, field) -> Bracket(s, val, Str(s, field));
   Colon(s, obj, field) -> ColonBracket(s, obj, Str(s, field));
-  Paren(s, x) -> x;
-  For(s, iter, [ForBind(s2, bs, es) ...], ann, body) ->
-    App(s, iter, [Lam(s, [], [bs ...], ann, "", body, Block(s, [])),
-                  es ...]);
-  LeftApp(s, target, fun, [args ...]) ->
-    App(s, fun, [target, args ...]);
-
-  (* Incomplete w.r.t. type params *)
-  Fun(s, name, typarams, args, ann, doc, body, check) ->
-    Let(s, Bind(s, name, ABlank),
-      Lam(s, typarams, args, ann, doc, body, check));
-
-  (*
-  Prog(s, imps, block) ->
-    Prog(s, imps
-  # block: flatten-blocks
-  # data: very complex
-  # fun, lam, method use 'format' and 'if'
-  # Cases: uses build-location
-  Cases(s, type, val, cases) ->
-    CasesElse(s, type, val, cases,
-	  Block(s, [App(s, Id(s, "raise"),
-                 [App(s, Bracket(s, Id(s, "error"), Str(s, "cases-miss")),
-                   [Str(s, "cases:no cases matched",
-                        BUILD_LOCATION(s), List(s, []))])])]));
-  CasesElse(s, type, val, [CasesBranch(s2, name, args, body) ...], else) ->
-    App(s, Dot(s, type, "case_matcher"),
-      [val,
-       List(s, [Obj(s,
-          [DataField(s2, Str(s2, "key"), Str(s2, name)),
-           DataField(s2, Str(s2, "action"),
-               Lam(s2, [], args, ABlank, "", body, Block(s2, [])))]) ...]),
-       Lam(s, empty, empty, ABlank, "", else, Block(s, [])),
-       BUILD_LOCATION(s)]);
-  # Try: uses gensym
-  Try(s, try, exn, catch) ->
-    GENSYM exn-id
-    Try(s, try, BindSyntax ...)
-  DataField(s, name, value) ->
-    DataField(s, name, value);
-  MethodField(s, name, args, ann, doc, body, check) ->
-    DataField(s, name,
-              ADD_TOSTRING(s, "method", (if (s-str? name) (s-str-s name) "")),
-              Method(s, args, ann, doc, body, check));
-  
-  FlattenBlocks([]) -> ...;
-  FlattenBlocks(block) -> block;
-  FlattenBlocks([Block(s, stmts), Block(_, []), blocks ...]) ->
-    FlattenBlocks([Block(s, stmts), blocks ...]);
-  FlattenBlocks([Block(s, [x, ...]), Block(_, [y, ys ...]), blocks ...]) ->
-    CANNOT WRITE APPEND!
-  *)
