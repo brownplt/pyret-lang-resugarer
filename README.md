@@ -6,6 +6,7 @@ The use of vocabulary from
 http://reservationsbvi.com/thisoldpirate/glossary.html is recommended
 when commenting and reporting issues.
 
+
 Setting Sail
 ------------
 
@@ -17,6 +18,7 @@ It'll build the Pyret compiler, run the tests, and hoist the
 anchor.
 
 When yer ready to brave the sea, visit [the introduction](https://github.com/brownplt/pyret-lang/blob/master/docs/introduction.markdown).
+
 
 Setting up Resugaring
 ---------------------
@@ -31,3 +33,12 @@ that subdirectory.
 Now you should be ready to run resugaring. Just use the '--trace' option:
 
     raco pyret --trace examples/ahoy-world.arr
+
+Before the Pyret program is run, it will be prefixed by the output of
+Pyret's standard resugaring ('--std-->') and its desugaring as performed
+by the Resugarer system ('--new-->'). These ought to be identical!
+
+As it runs, each evaluation step will be printed as a Pyret AST. Terms in
+the AST that have been reduced to values are surrounded by angle brackets (<...>).
+
+This is a work in progress.
