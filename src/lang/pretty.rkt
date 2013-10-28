@@ -159,6 +159,13 @@
      (newlines (format "else if ~a:" (pretty cond))
                (indented (prettier-implicit-block consq)))]
     
+    [(s-try _ x (s-bind _ v _) y)
+     (newlines "try:"
+               (indented (prettier-implicit-block x))
+               (format "except(~a):" v)
+               (indented (prettier-implicit-block y))
+               "end")]
+    
     [(s-for _ iter binds ann body)
      (newlines (concat "for "
                        (pretty iter)

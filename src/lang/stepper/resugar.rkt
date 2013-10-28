@@ -63,14 +63,14 @@
                   (subprocess #f #f #f cmd-file grammar-file)]]
       (parameterize
           [[expand (λ (t sort)
-             (send-command (format "desugar ~a ~a\n" sort (ast->string t)) out)
+             (send-command (format "desugar ~a ~a\n" sort (ast->string t #t)) out)
              (if DEBUG_DESUGAR
                  (let [[response (receive-response in err)]]
                    (display (format "desugaring...\n  --std-->\n~a\n --new-->\n~a\n\n" (pretty (desugar-pyret t)) (pretty response)))
                    response)
              (receive-response in err)))]
            [unexpand (λ (t sort [keep-srclocs? #t])
-             (send-command (format "resugar ~a ~a\n" sort (ast->string t keep-srclocs?)) out)
+             (send-command (format "resugar ~a ~a\n" sort (ast->string t #f keep-srclocs?)) out)
              (receive-response in err))]]
         (let [[result (begin expr exprs ...)]]
           (subprocess-kill resugarer #t)

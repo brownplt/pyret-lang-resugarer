@@ -13,8 +13,8 @@
 
 (define-setting DISABLE_SRCLOCS set-disable-srclocs! #f)
 
-(define (ast->string x [keep-srcloc? (not DISABLE_SRCLOCS)])
-  (aterm->string (ast->aterm x keep-srcloc?)))
+(define (ast->string x is-surface? [keep-srcloc? (not DISABLE_SRCLOCS)])
+  (aterm->string (ast->aterm x is-surface? keep-srcloc?)))
 
 (define (string->ast x)
   (aterm->ast (string->aterm x)))
@@ -22,7 +22,7 @@
 (define (srcloc->aterm s)
   (Node 'S (reify-srcloc s)))
 
-(define (ast->aterm ast keep-srcloc)
+(define (ast->aterm ast is-surface? keep-srcloc)
   (define-syntax-rule (node l s xs ...)
     (tagged-node s l (list xs ...)))
   (define (tagged-node s lbl xs)
@@ -39,7 +39,7 @@
       (if (empty? tags)
           x
           (Tagged tags x))))
-  (define (rec x) (ast->aterm x keep-srcloc))
+  (define (rec x) (ast->aterm x is-surface? keep-srcloc))
   (define (recs xs) (List (map rec xs)))
   (define (show-name x)
     (if (symbol? x)
@@ -47,13 +47,6 @@
         (format "[?~a?]" x))
     #;(symbol->string x)) ;TODO(justin)
   (define (show-number x) (number->string x))
-  (define (stmt s x)
-    (let [[srcloc (make-srcloc s)]]
-      (attach-tags s srcloc
-                   (if (not (s-stmt? x))
-                       (Node 'Expr (list (rec x)))
-                       (rec x)))))
-  (define (stmts s xs) (map (λ (x) (stmt s x)) xs))
   
   (match ast
     [(? Func? x)         (rec (Func-term x))]
@@ -104,15 +97,17 @@
     [(s-provide s x)     (node 'Provide s (rec x))]
     [(s-provide-all s)   (node 'ProvideAll s)]
     ; Statements
-    [(s-block s ss)      (node 'Block s (List (stmts s ss)))]
-    [(s-check s ss)      (node 'Check s (List (stmts s ss)))]
+    [(s-block s ss)      (node 'Block s (recs ss))]
+    [(s-check s ss)      (node 'Check s (recs ss))]
     [(s-fun s n ns bs a str check body)
      (node 'Fun s (show-name n) (List (map show-name ns)) (recs bs)
                   (rec a) str (rec check) (rec body))]
     [(s-var s b x)       (node 'Var s (rec b) (rec x))]
     [(s-let s b x)       (node 'Let s (rec b) (rec x))]
     [(s-when s x b)      (node 'When s (rec x) (rec b))]
-    [(s-try s x b y)     (node 'Try s (rec x) (rec b) (rec y))]
+    [(s-try s x b y)
+     (if is-surface?     (node 'Try s (rec x) (rec b) (rec y))
+                         (node 'CoreTry s (rec x) (rec b) (rec y)))]
     [(s-if s brs)        (node 'If s (recs brs))]
     [(s-if-else s brs b) (node 'IfElse s (recs brs) (rec b))]
     [(s-if-branch s x b) (node 'IfBranch s (rec x) (rec b))]
@@ -210,7 +205,6 @@
     ; Statements
     [(Node 'Block (list s ss))     (s-block (syn s) (recs ss))]
     [(Node 'Check (list s ss))     (s-check (syn s) (recs ss))]
-    [(Node 'Expr (list x))         (rec x)]
     [(Node 'Fun (list s n ns bs a str check body))
      (s-fun (syn s) (read-name n) (read-names ns)
             (recs bs) (rec a) str (rec check) (rec body))]
@@ -218,6 +212,7 @@
     [(Node 'Let (list s b x))      (s-let (syn s) (rec b) (rec x))]
     [(Node 'When (list s x b))     (s-when (syn s) (rec x) (rec b))]
     [(Node 'Try (list s x b y))    (s-try (syn s) (rec x) (rec b) (rec y))]
+    [(Node 'CoreTry (list s x b y))(s-try (syn s) (rec x) (rec b) (rec y))]
     [(Node 'If (list s brs))       (s-if (syn s) (recs brs))]
     [(Node 'IfElse (list s brs b)) (s-if-else (syn s) (recs brs) (rec b))]
     [(Node 'IfBranch (list s x b)) (s-if-branch (syn s) (rec x) (rec b))]

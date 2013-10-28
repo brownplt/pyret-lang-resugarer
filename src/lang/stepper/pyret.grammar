@@ -37,7 +37,6 @@ core
   constructors
 
     Prog : S * [Header] * Expr -> Prog;
-	Expr : Expr -> Stmt;
 
 
     # Headers #
@@ -49,13 +48,13 @@ core
 
     # Statements #
 
-	Block : S * [Stmt] -> Expr;
-    Check : S * [Stmt] -> Stmt;
+	Block : S * [Expr] -> Expr;
+    Check : S * [Expr] -> Expr;
 
-	Fun : S * String * [String] * [Bind] * Ann * String * Expr * Expr -> Stmt;
-	Var : S * Bind * Expr -> Stmt;
-	Let : S * Bind * Expr -> Stmt;
-	Assign : S * String * Expr -> Stmt;
+	Fun : S * String * [String] * [Bind] * Ann * String * Expr * Expr -> Expr;
+	Var : S * Bind * Expr -> Expr;
+	Let : S * Bind * Expr -> Expr;
+	Assign : S * String * Expr -> Expr;
 	
 	IfElse : S * [IfBranch] * Expr -> Expr;
 	IfBranch : S * Expr * Expr -> IfBranch;
@@ -64,7 +63,7 @@ core
 	CasesElse : S * Expr * Expr * [CasesBranch] * Expr -> Expr;
 	CasesBranch : S * String * [Bind] * Expr -> CasesBranch;
 
-	Data : S * String * [String] * [Variant] * [Member] * Expr -> Stmt;
+	Data : S * String * [String] * [Variant] * [Member] * Expr -> Expr;
 	Variant : S * String * [Bind] * [Member] -> Variant;
 	SingletonVariant : S * String * [Member] -> Variant;
 
@@ -76,11 +75,11 @@ core
 
     # Expressions #
 
-    UserBlock : S * [Stmt] -> Expr;
+    UserBlock : S * [Expr] -> Expr;
 
 	App : S * Expr * [Expr] -> Expr;
 	LeftApp : S * Expr * Expr * [Expr] -> Expr;
-	Try : S * Expr * Bind * Expr -> Expr;
+	CoreTry : S * Expr * Bind * Expr -> Expr;
 	
 	Dot : S * Expr * String -> Expr;
 	Bracket : S * Expr * Expr -> Expr;
@@ -144,7 +143,6 @@ surface
   constructors
 
     Prog : S * [Header] * Expr -> Prog;
-	Expr : Expr -> Stmt;
 
 
     # Headers #
@@ -157,13 +155,13 @@ surface
 
     # Statements #
 
-	Block : S * [Stmt] -> Expr;
+	Block : S * [Expr] -> Expr;
 
-	Fun : S * String * [String] * [Bind] * Ann * String * Expr * Expr -> Stmt;
-	Var : S * Bind * Expr -> Stmt;
-	Let : S * Bind * Expr -> Stmt;
-	When : S * Expr * Expr -> Stmt;
-	Assign : S * String * Expr -> Stmt;
+	Fun : S * String * [String] * [Bind] * Ann * String * Expr * Expr -> Expr;
+	Var : S * Bind * Expr -> Expr;
+	Let : S * Bind * Expr -> Expr;
+	When : S * Expr * Expr -> Expr;
+	Assign : S * String * Expr -> Expr;
 	
 	If : S * [IfBranch] -> Expr;
 	IfElse : S * [IfBranch] * Expr -> Expr;
@@ -173,7 +171,7 @@ surface
 	CasesElse : S * Expr * Expr * [CasesBranch] * Expr -> Expr;
 	CasesBranch : S * String * [Bind] * Expr -> CasesBranch;
 
-	Data : S * String * [String] * [Variant] * [Member] * Expr -> Stmt;
+	Data : S * String * [String] * [Variant] * [Member] * Expr -> Expr;
 	Variant : S * String * [Bind] * [Member] -> Variant;
 	SingletonVariant : S * String * [Member] -> Variant;
 
@@ -183,7 +181,7 @@ surface
 
     # Expressions #
 
-    UserBlock : S * [Stmt] -> Expr;
+    UserBlock : S * [Expr] -> Expr;
 
 	Paren : S * Expr -> Expr;
 	
@@ -207,7 +205,7 @@ surface
 
 	List : S * [Expr] -> Expr;
 
-    Graph : S * [Expr] -> Stmt;
+    Graph : S * [Expr] -> Expr;
 
 
 
@@ -233,34 +231,43 @@ rules
     Let(s, Bind(s, name, ABlank),
       Lam(s, typarams, args, ann, doc, body, check));
 
-  Check(s, body) -> Expr(Id(s, "nothing"));
+  Check(s, body) -> Id(s, "nothing");
 
   (* Graph: complicated *)
 
   When(s, test, body) ->
-    Expr(IfElse(s, [IfBranch(s, test, body)],
-          Block(s, [Expr(Id(s, "p:nothing"))])));
+    IfElse(s, [IfBranch(s, test, body)],
+     Block(s, [Id(s, "p:nothing")]));
 
   If(s, branches) ->
     IfElse(s, branches, Block(s,
-      [Expr(App(s, Id(s, "raise"),
-	         [Str(s, "if: no tests matchedq")]))]));
+      [App(s, Id(s, "raise"),
+	    [Str(s, "if: no tests matchedq")])]));
+
+  Try(s, try, Bind(s2, v, ann), catch) ->
+    CoreTry(s, try, Bind(s2, exn_id, ann),
+      Block(s,
+        [App(s,
+           Lam(s, [], [Bind(s2, v, ann)], ABlank, "", catch, Block(s, [])),
+           [App(s, Bracket(s, Id(s, "error"), Str(s, "make-error")),
+                [Id(s, exn_id)])])]))
+    fresh exn_id;
 
   (* Try: not idempotent, uses gensym *)
 
   Cases(s, type, val, cases) ->
     CasesElse(s, type, val, cases,
-      Block(s, [Expr(App(s, Id(s, "raise"),
-                     [Str(s, "cases: no cases matched")]))]));
+      Block(s, [App(s, Id(s, "raise"),
+                [Str(s, "cases: no cases matched")])]));
 
   (* GENSYM should be gensymmed; some srclocs should be extracted *)
   CasesElse(s, type, val, [CasesBranch(s2, name, args, body) ...], else) ->
     Block(s, [Let(s, Bind(s, "GENSYM_temp", type), val),
-              Expr(App(s, Dot(s, Id(s, "GENSYM_temp"), "_match"),
-                   [Obj(s, [DataField(s2, Str(s2, name),
-                             Lam(s2, [], args, ABlank, "",
-                                 body, Block(s2, []))) ...]),
-                    Lam(s, [], [], ABlank, "", else, Block(s, []))]))]);
+              App(s, Dot(s, Id(s, "GENSYM_temp"), "_match"),
+              [Obj(s, [DataField(s2, Str(s2, name),
+                        Lam(s2, [], args, ABlank, "",
+                            body, Block(s2, []))) ...]),
+               Lam(s, [], [], ABlank, "", else, Block(s, []))])]);
 
   For(s, iter, [ForBind(s2, bs, es) ...], ann, body) ->
     App(s, iter, [Lam(s, [], [bs ...], ann, "", body, Block(s, [])),
@@ -290,7 +297,7 @@ rules
     App(s, Bracket(s, Op(s, "==", x, y), Str(s, "_not")), []);
   Op(s, "or", x, y) ->
     App(s, Bracket(s, x, Str(s, "_or")),
-           [Lam(s, [], [], ABlank, "", Block(s, [Expr(y)]), Block(s, []))]);
+           [Lam(s, [], [], ABlank, "", Block(s, [y]), Block(s, []))]);
   Op(s, "and", x, y) ->
     App(s, Bracket(s, x, Str(s, "_and")),
            [Lam(s, [], [], ABlank, "", y, Block(s, []))]);
