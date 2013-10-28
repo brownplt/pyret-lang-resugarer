@@ -18,3 +18,16 @@ anchor.
 
 When yer ready to brave the sea, visit [the introduction](https://github.com/brownplt/pyret-lang/blob/master/docs/introduction.markdown).
 
+Setting up Resugaring
+---------------------
+
+First, make sure you have a recentish version of Haskell
+installed. (Ideally, install the Haskell platform --
+http://www.haskell.org/platform/).
+
+Make sure the lib/Resugarer submodule is up to date. Then run `make` in
+that subdirectory.
+
+Now you should be ready to run resugaring. Just use the '--trace' option:
+
+    raco pyret --trace examples/ahoy-world.arr
