@@ -11,7 +11,6 @@
 (set-debug-desugar! #t)
 (set-debug-communication! #f)
 (set-debug-steps! #f)
-(set-disable-srclocs! #f)
 
 (provide (rename-out
           [with-resugaring resugarer:with-resugaring]

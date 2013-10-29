@@ -32,16 +32,16 @@
   #`(r:with-continuation-mark
      (r:quote resugar-mark)
      (r:lambda (__) #,fr)
-     (r:begin
       (r:let [[result (r:let [] #,expr)]]
              ($emit result)
-             result))))
+             result)))
 
 (define (ephemeral-frame fr expr)
   #`(r:with-continuation-mark
      (r:quote resugar-mark)
      (r:lambda (__) #,fr)
-     (r:let [] #,expr)))
+      (r:let [[result (r:let [] #,expr)]]
+             result)))
 
 #|
 ; Annotate function argument expressions
@@ -168,8 +168,7 @@
                                 [f-id (make-immediate-id id)])
                     #`(r:define
                        #,(discard-_ id)
-                       #,(add-let-frame
-                          #`(p:pλ (arg ...) #,doc (f-id arg ...)))))
+                       (p:pλ (arg ...) #,doc (f-id arg ...))))
                   #`nothing)]
           [else (list inline-binding)])]
         [(s-extend s (s-lam l _ args _ doc body _) fields)
@@ -270,7 +269,7 @@
           [fvar (gensym 'fun)]]
       ; PROBLEM AT #,@args
       (define (add-frame args body) (frame #`(s-app #,l #,fvar (r:list #,@args)) body))
-      #`(r:let [[#,fvar #,(frame #`(s-app #,l __ (r:list #,@(map adorn args)))
+      #`(r:let [[#,fvar #,(ephemeral-frame #`(s-app #,l __ (r:list #,@(map adorn args)))
                                  fun-stx)]]
                #,(compile-args add-frame fvar hidden-args vars args args-stx env))))
 
@@ -344,31 +343,6 @@
                              (compile-expr expr env)))]
                   (r:set! name-stx temp)
                   temp)))]
-
-    
-    #|
-    ; This should be done in desugaring, not compilation!
-    [(s-app l (s-bracket l2 obj field) args)
-     (let [[argids (map (λ (_) (format-id #'obj "~a" #`#,(gensym 'arg))) args)]
-           [field-stx (compile-string-literal l2 field env)]]
-       #`(r:let* [[%obj #,(frame
-                           #`(s-app #,l (s-bracket #,l2 __ #,(adorn field))
-                                    (r:list #,@(map adorn args)))
-                           (compile-expr obj env))]
-                  [%field #,(frame
-                             #`(s-app #,l (s-bracket #,l2 %obj __)
-                                      (r:list #,@(map adorn args)))
-                             #`(p:p-base-method
-                                (p:get-raw-field #,(loc-stx l) %obj #,field-stx)))]]
-                 #,(compile-args
-                    (lambda (args body)
-                      (frame #`(s-app #,l (s-bracket #,l2 #,obj #,field) (r:list #,@args))
-                             body))
-                    '%field (list '%obj) argids
-                    (map (curryr compile-expr env) args)
-                    env)))]
-    |#
-    
 
     [(s-app l fun args)
      (define compiled-fun

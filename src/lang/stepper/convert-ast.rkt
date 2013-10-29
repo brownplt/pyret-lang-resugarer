@@ -4,16 +4,13 @@
 (require "../ast.rkt")
 (require "grammar.rkt")
 (require "../pretty.rkt")
-(require (only-in "../runtime-defns.rkt" to-string pyret-to-string))
 (require (except-in parser-tools/lex nothing))
 (require ragg/support)
 (require rackunit)
 
-(provide ast->string string->ast set-disable-srclocs!)
+(provide ast->string string->ast)
 
-(define-setting DISABLE_SRCLOCS set-disable-srclocs! #f)
-
-(define (ast->string x is-surface? [keep-srcloc? (not DISABLE_SRCLOCS)])
+(define (ast->string x is-surface? [keep-srcloc? (not DEBUG_COMMUNICATION)])
   (aterm->string (ast->aterm x is-surface? keep-srcloc?)))
 
 (define (string->ast x)
@@ -146,7 +143,7 @@
     [(s-extend s x ms)       (node 'Extend s (rec x) (recs ms))]
     [(s-update s x fs)       (node 'Update s (rec x) (recs fs))]
     ; Runtime values
-    [x                       (Node 'Value (list (pyret-to-string x)))]))
+    [x                       (Node 'Value (list (format "<~a>" (pretty-val x))))]))
 
 
 (define (aterm->ast x [os (list)])

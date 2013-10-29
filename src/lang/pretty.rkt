@@ -7,12 +7,12 @@
   racket/list
   "ast.rkt"
   "stepper/data.rkt"
-  (only-in "runtime-defns.rkt" to-string pyret-to-string))
+  (only-in "runtime-defns.rkt" p-opaque? p-base? p-str? p-str-s to-repr))
 
 (provide
   pretty
   pretty-ann
-  show-pyret-val)
+  pretty-val)
 
 (define (pretty ast) (vary-pretty ast 0))
 
@@ -71,9 +71,6 @@
         (apply newlines-prefixed (map prettier (s-block-stmts block)))
         (prettier block)))
   
-  (define (racket-repr-to-string val)
-    (format "~a" val))
-  
   (match ast
     
     ; Resugarer-specific:
@@ -91,6 +88,10 @@
         (append
          (map pretty imps)
          (list (pretty-implicit-block block))))]
+    
+    ; Flatten uncessarily nested blocks
+    [(s-block _ (list (s-block s stmts)))
+     (pretty (s-block s stmts))]
     
     [(s-block _ stmts)
           (apply newlines (append (list "block:")
@@ -232,13 +233,15 @@
 
     [(s-paren _ e) (format "(~a)" (pretty e))]
     
-    [else (show-pyret-val ast)]))
+    [else (pretty-val ast)]))
 
-(define (show-pyret-val x)
-  (format "<~a>"
-          (cond [(procedure? x) "proc"]
-                [(struct? x) "obj"]
-                [else (to-string x)])))
+(define (pretty-val val)
+  (cond [(p-opaque? val) val]
+        [(p-str? val)
+         (format "'~a'" (p-str-s val))]
+        [(p-base? val) (to-repr val)]
+        [(procedure? val) "proc"]
+        [else "unprintable-expr"]))
 
 (define (pretty-ann ann)
   (match ann
