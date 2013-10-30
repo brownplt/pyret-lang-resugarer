@@ -27,8 +27,9 @@ First, make sure you have a recentish version of Haskell
 installed. (Ideally, install the Haskell platform --
 http://www.haskell.org/platform/).
 
-Make sure the lib/Resugarer submodule is up to date. Then run `make` in
-that subdirectory.
+Make sure the lib/Resugarer submodule is up to date. Run `make` in
+lib/Resugarer/hs, and then symlink lib/Resugarer/hs/Resugarer (the
+executable that was just produced) to src/lang/stepper/Resugarer.
 
 Now you should be ready to run resugaring. Just use the '--trace' option:
 
