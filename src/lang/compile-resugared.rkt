@@ -267,7 +267,6 @@
   (define (compile-app l fun-stx hidden-args args-stx args env)
     (let [[vars (map (lambda (_) (gensym 'arg)) args)]
           [fvar (gensym 'fun)]]
-      ; PROBLEM AT #,@args
       (define (add-frame args body) (frame #`(s-app #,l #,fvar (r:list #,@args)) body))
       #`(r:let [[#,fvar #,(ephemeral-frame #`(s-app #,l __ (r:list #,@(map adorn args)))
                                  fun-stx)]]
