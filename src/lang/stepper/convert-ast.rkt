@@ -73,7 +73,7 @@
     ; Annotations
     [(a-blank)           (Node 'ABlank (list))]
     [(a-any)             (Node 'AAny (list))]
-    [(a-name s n)        (node 'AName (show-name n))]
+    [(a-name s n)        (node 'AName s (show-name n))]
     [(a-arrow s as a)    (node 'AArrow s (recs as) (rec a))]
     [(a-method s as a)   (node 'AMethod s (recs as) (rec a))]
     [(a-record s fs)     (node 'ARecord s (recs fs))]
@@ -88,7 +88,7 @@
     ; Headers
     [(s-prog s hs b)     (node 'Prog s (recs hs) (rec b))]
     [(s-import s x n)
-     (if (symbol? s)
+     (if (symbol? x)
          (node 'ImportSymbol s (show-name x) (show-name n))
          (node 'ImportString s x (show-name n)))]
     [(s-provide s x)     (node 'Provide s (rec x))]
@@ -127,7 +127,7 @@
     ; Expressions
     [(s-op s op x y)
      (node 'Op s (hash-ref reverse-op-lookup-table op) (rec x) (rec y))]
-    [(s-user-block s ss)     (node 'UserBlock s (recs ss))]
+    [(s-user-block s x)      (node 'UserBlock s (rec x))]
     [(s-not s x)             (node 'Not s (rec x))]
     [(s-paren s x)           (node 'Paren s (rec x))]
     [(s-app s x xs)          (node 'App s (rec x) (recs xs))]
@@ -232,7 +232,7 @@
     ; Expressions
     [(Node 'Op (list s op x y))
      (s-op (syn s) (hash-ref op-lookup-table op) (rec x) (rec y))]
-    [(Node 'UserBlock (list s ss)) (s-user-block (syn s) (recs ss))]
+    [(Node 'UserBlock (list s x))  (s-user-block (syn s) (rec x))]
     [(Node 'Not (list s x))        (s-not (syn s) (rec x))]
     [(Node 'Paren (list s x))      (s-paren (syn s) (rec x))]
     [(Node 'App (list s x xs))     (s-app (syn s) (rec x) (recs xs))]

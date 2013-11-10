@@ -8,9 +8,10 @@
 ; debugging:
 (require "../desugar.rkt")
 
-(set-debug-desugar! #t)
+(set-debug-desugar! #f)
 (set-debug-communication! #f)
 (set-debug-steps! #f)
+(set-silence! #f)
 
 (provide (rename-out
           [with-resugaring resugarer:with-resugaring]
@@ -69,8 +70,9 @@
                    response)
              (receive-response in err)))]
            [unexpand (λ (t sort [keep-srclocs? #t])
-             (send-command (format "resugar ~a ~a\n" sort (ast->string t #f keep-srclocs?)) out)
-             (receive-response in err))]]
+             (begin
+               (send-command (format "resugar ~a ~a\n" sort (ast->string t #f keep-srclocs?)) out)
+               (receive-response in err)))]]
         (let [[result (begin expr exprs ...)]]
           (subprocess-kill resugarer #t)
           result)))))
@@ -99,8 +101,7 @@
     (display (format "[SKIP]\n~a\n\n" (pretty t)))))
 
 (define (display-step t)
-  (display (format "\n~a\n\n" (pretty t)))
-  (when DEBUG_STEPS (newline)))
+  (display (format "\n~a\n\n" (pretty t))))
     
 
 (define (sort t)
@@ -109,16 +110,19 @@
         [else "Expr"]))
 
 (define (emit x [id #f])
-  (if id
-      (let* [[name (Var-name x)]
-             [t (Var-value x)]
-             [u ((unexpand) t (sort t) #f)]]
-        (if (CouldNotUnexpand? u) (emit x) (void)))
-      (let* [[t (reconstruct-stack x)]
-             [u ((unexpand) t (sort t) #f)]]
-        (if (CouldNotUnexpand? u)
-            (display-skip t)
-            (display-step u)))))
+  (cond
+    [SILENCE (void)]
+    [id
+     (let* [[name (Var-name x)]
+            [t (Var-value x)]
+            [u ((unexpand) t (sort t) #f)]]
+       (if (CouldNotUnexpand? u) (emit x) (void)))]
+    [else
+     (let* [[t (reconstruct-stack x)]
+            [u ((unexpand) t (sort t) #f)]]
+       (if (CouldNotUnexpand? u)
+           (display-skip t)
+           (display-step u)))]))
 
 (define (value->term x)
   (cond [(Func? x)

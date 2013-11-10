@@ -1,7 +1,7 @@
 #lang pyret
 
 try:
-  print(raise("oops"))
+  print(raise("oops" + "?"))
 except(e):
-  print(e)
+  print("It's fine")
 end

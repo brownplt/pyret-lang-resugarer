@@ -59,10 +59,6 @@ core
 	IfElse : S * [IfBranch] * Expr -> Expr;
 	IfBranch : S * Expr * Expr -> IfBranch;
 	
-	Cases : S * Expr * Expr * [CasesBranch] -> Expr;
-	CasesElse : S * Expr * Expr * [CasesBranch] * Expr -> Expr;
-	CasesBranch : S * String * [Bind] * Expr -> CasesBranch;
-
 	Data : S * String * [String] * [Variant] * [Member] * Expr -> Expr;
 	Variant : S * String * [Bind] * [Member] -> Variant;
 	SingletonVariant : S * String * [Member] -> Variant;
@@ -75,7 +71,7 @@ core
 
     # Expressions #
 
-    UserBlock : S * [Expr] -> Expr;
+    UserBlock : S * Expr -> Expr;
 
 	App : S * Expr * [Expr] -> Expr;
 	LeftApp : S * Expr * Expr * [Expr] -> Expr;
@@ -167,8 +163,8 @@ surface
 	IfElse : S * [IfBranch] * Expr -> Expr;
 	IfBranch : S * Expr * Expr -> IfBranch;
 	
-	Cases : S * Expr * Expr * [CasesBranch] -> Expr;
-	CasesElse : S * Expr * Expr * [CasesBranch] * Expr -> Expr;
+	Cases : S * Ann * Expr * [CasesBranch] -> Expr;
+	CasesElse : S * Ann * Expr * [CasesBranch] * Expr -> Expr;
 	CasesBranch : S * String * [Bind] * Expr -> CasesBranch;
 
 	Data : S * String * [String] * [Variant] * [Member] * Expr -> Expr;
@@ -181,7 +177,7 @@ surface
 
     # Expressions #
 
-    UserBlock : S * [Expr] -> Expr;
+    UserBlock : S * Expr -> Expr;
 
 	Paren : S * Expr -> Expr;
 	
@@ -260,14 +256,15 @@ rules
       Block(s, [App(s, Id(s, "raise"),
                 [Str(s, "cases: no cases matched")])]));
 
-  (* GENSYM should be gensymmed; some srclocs should be extracted *)
+  (* Some srclocs should be extracted *)
   CasesElse(s, type, val, [CasesBranch(s2, name, args, body) ...], else) ->
-    Block(s, [Let(s, Bind(s, "GENSYM_temp", type), val),
-              App(s, Dot(s, Id(s, "GENSYM_temp"), "_match"),
+    Block(s, [Let(s, Bind(s, temp, type), val),
+              App(s, Dot(s, Id(s, temp), "_match"),
               [Obj(s, [DataField(s2, Str(s2, name),
                         Lam(s2, [], args, ABlank, "",
                             body, Block(s2, []))) ...]),
-               Lam(s, [], [], ABlank, "", else, Block(s, []))])]);
+               Lam(s, [], [], ABlank, "", else, Block(s, []))])])
+  fresh temp;
 
   For(s, iter, [ForBind(s2, bs, es) ...], ann, body) ->
     App(s, iter, [Lam(s, [], [bs ...], ann, "", body, Block(s, [])),
@@ -302,22 +299,22 @@ rules
     App(s, Bracket(s, x, Str(s, "_and")),
            [Lam(s, [], [], ABlank, "", y, Block(s, []))]);
   Op(s, "+", x, y)  -> App(s, Bracket(s, x, Str(s, "_plus")), [y]);
-  # Op(s, "+", x, y) ->
-  #   App(s, Lam(s, [], [Bind(s, "%op_temp1", ABlank),
-  #                      Bind(s, "%op_temp2", ABlank)], ABlank, "",
-  #              App(s, Bracket(s, Id(s, "%op_temp1"), Str(s, "_plus")),
-  #                  [Id(s, "%op_temp2")]),
-  #              Block(s, [])),
-  #     [x, y]);
-  # Op(s, "*", x, y) ->
-  #   App(s, Lam(s, [], [Bind(s, "%op_temp1", ABlank),
-  #                      Bind(s, "%op_temp2", ABlank)], ABlank, "",
-  #              App(s, Bracket(s, Id(s, "%op_temp1"), Str(s, "_times")),
-  #                  [Id(s, "%op_temp2")]),
-  #              Block(s, [])),
-  #     [x, y]);
-  Op(s, "-", x, y)  -> App(s, Bracket(s, x, Str(s, "_minus")), [y]);
   Op(s, "*", x, y)  -> App(s, Bracket(s, x, Str(s, "_times")), [y]);
+  # Op(s, "+", x, y) ->
+  #   Block(s, [Let(s, Bind(s, "temp", ABlank),
+  #                 Obj(s, [DataField(s, Str(s, "left"), x),
+  #                         DataField(s, Str(s, "right"), y)])),
+  #             App(s, Bracket(s, Bracket(s, Id(s, "temp"), Str(s, "left")),
+  #                               Str(s, "_plus")),
+  #                    [Bracket(s, Id(s, "temp"), Str(s, "right"))])]);
+  # Op(s, "*", x, y) ->
+  #   Block(s, [Let(s, Bind(s, "temp", ABlank),
+  #                 Obj(s, [DataField(s, Str(s, "left"), x),
+  #                         DataField(s, Str(s, "right"), y)])),
+  #             App(s, Bracket(s, Bracket(s, Id(s, "temp"), Str(s, "left")),
+  #                               Str(s, "_times")),
+  #                    [Bracket(s, Id(s, "temp"), Str(s, "right"))])]);
+  Op(s, "-", x, y)  -> App(s, Bracket(s, x, Str(s, "_minus")), [y]);
   Op(s, "/", x, y)  -> App(s, Bracket(s, x, Str(s, "_divide")), [y]);
   Op(s, "<=", x, y) -> App(s, Bracket(s, x, Str(s, "_lessequal")), [y]);
   Op(s, "<", x, y)  -> App(s, Bracket(s, x, Str(s, "_lessthan")), [y]);

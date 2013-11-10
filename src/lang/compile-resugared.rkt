@@ -7,6 +7,7 @@
   racket/match
   racket/splicing
   racket/syntax
+  racket/runtime-path
   "helpers.rkt"
   "../parameters.rkt"
   "ast.rkt"
@@ -18,13 +19,12 @@
 ;;; Keeping track of the stack ;;;
 
 (define (compile-stepping-prelude ast stx)
-  (with-syntax [[code* stx]]
-    #`(resugarer:with-resugaring
-        (r:let []
-          (r:define $emit (r:lambda (z)
-                            (resugarer:emit z)))
-          (resugarer:emit-first #,(adorn ast))
-          code*))))
+  #`(resugarer:with-resugaring
+     (r:let []
+       (r:define $emit (r:lambda (z)
+         (resugarer:emit z)))
+       (resugarer:emit-first #,(adorn ast))
+       #,stx)))
 
 ;;; Stepper ;;;
 
@@ -42,20 +42,6 @@
      (r:lambda (__) #,fr)
       (r:let [[result (r:let [] #,expr)]]
              result)))
-
-#|
-; Annotate function argument expressions
-(define (annot/args xs_ fv_ xvs0_ xvs_ xts_)
-  (if (empty? xs_)
-      empty
-      (with-syntax [[fv* fv_]
-                    [(xvs0* ...) xvs0_]
-                    [(xts* ...) (cdr xts_)]]
-        (cons (annot/frame (annot/eval (car xs_))
-                           #'(r:list fv* xvs0* ... __ xts* ...))
-              (annot/args (cdr xs_) fv_ (append xvs0_ (list (car xvs_)))
-                          (cdr xvs_) (cdr xts_))))))
-|#
 
 ; Call external code
 (define (annot/extern-call func_ args_)
@@ -95,6 +81,8 @@
          (error (format "stepper/adorn: Unrecognized AST node type. ~a" x))]))
 
 
+
+(define-runtime-path FFI "racket-ffi/")
 
 (define (loc-stx loc)
   (with-syntax ([(loc-param ...) (loc-list loc)])
@@ -199,14 +187,15 @@
                  #`nothing)])]
       [_ (list (add-frame (compile-expr/internal ast-node env)))]))
   (define (compile-stmts stmts env)
-    (if (empty? stmts)
-        (list)
-        (let* [[fr #`(s-block
-                      #,l (r:list __ #,@(map adorn (cdr stmts))))]
-               [add-frame (λ (stx)
-                 (frame fr stx))]]
-          (append (compile-stmt (car stmts) env add-frame)
-                  (compile-stmts (cdr stmts) env)))))
+    (cond [(empty? stmts) (list)]
+          [(empty? (cdr stmts))
+           (compile-stmt (car stmts) env (λ (x) x))]
+          [else
+           (let* [[fr #`(s-block
+                         #,l (r:list __ #,@(map adorn (cdr stmts))))]
+                  [add-frame (λ (stx) (frame fr stx))]]
+             (append (compile-stmt (car stmts) env add-frame)
+                     (compile-stmts (cdr stmts) env)))]))
   (define ids (block-ids stmts))
   (define fun-ids (block-fun-ids stmts))
   (define old-fun-ids (compile-env-functions-to-inline env))
@@ -215,17 +204,15 @@
                                (compile-env-toplevel? env)))
   (define stmts-stx (compile-stmts stmts new-env))
   (if (empty? stmts-stx)
-      (list #'nothing) ;!!!
+      (list #'nothing) ;TODO
       stmts-stx))
 
 (define (compile-member ast-node env)
   (match ast-node
     [(s-data-field l name value)
      (attach l
-       (with-syntax*
-        ([name-stx (compile-string-literal l name env)]
-         [val-stx (compile-expr/internal value env)])
-         #`(r:cons name-stx val-stx)))]))
+       #`(r:cons #,(compile-string-literal l name env)
+                 #,(compile-expr/internal value env)))]))
 (define (compile-string-literal l e env)
   (match e
     [(s-str _ s) (d->stx s l)]
@@ -251,13 +238,14 @@
                             #,(frame #`(#,bracket-constr #,l temp __)
                                      (compile-string-literal l field env)))))))
 
-  (define (compile-args add-frame fvar used-vars unused-vars unused-args unused-args-stx env)
+  (define (compile-args add-frame return-result
+                        used-vars unused-vars unused-args unused-args-stx env)
     (if (empty? unused-args)
-        #`(#,fvar #,@used-vars)
+        (return-result used-vars)
         #`(r:let [[#,(car unused-vars)
                    #,(add-frame (append used-vars (list '__) (map adorn (cdr unused-args)))
                                 (car unused-args-stx))]]
-                 #,(compile-args add-frame fvar
+                 #,(compile-args add-frame return-result
                                  (append used-vars (list (car unused-vars)))
                                  (cdr unused-vars)
                                  (cdr unused-args)
@@ -267,10 +255,15 @@
   (define (compile-app l fun-stx hidden-args args-stx args env)
     (let [[vars (map (lambda (_) (gensym 'arg)) args)]
           [fvar (gensym 'fun)]]
-      (define (add-frame args body) (frame #`(s-app #,l #,fvar (r:list #,@args)) body))
-      #`(r:let [[#,fvar #,(ephemeral-frame #`(s-app #,l __ (r:list #,@(map adorn args)))
-                                 fun-stx)]]
-               #,(compile-args add-frame fvar hidden-args vars args args-stx env))))
+      (define (add-frame args body)
+        (frame #`(s-app #,l #,fvar (r:list #,@args)) body))
+      (define (return-result args)
+        #`(#,fvar #,@args))
+      #`(r:let [[#,fvar #,(ephemeral-frame
+                           #`(s-app #,l __ (r:list #,@(map adorn args)))
+                           fun-stx)]]
+               #,(compile-args add-frame return-result
+                               hidden-args vars args args-stx env))))
 
   
   (match ast-node
@@ -280,7 +273,9 @@
      (with-syntax ([(stmt ...) (compile-block l stmts new-env)])
        (attach l #'(r:let () stmt ...)))]
 
-    [(s-user-block l body) (compile-expr body env)]
+    [(s-user-block l body)
+     (frame #`(s-user-block #,l __)
+            (compile-expr body env))]
 
     [(s-num l n) #`(p:mk-num #,(d->stx n l))]
     [(s-bool l #t) #`p:p-true]
@@ -391,10 +386,16 @@
 
     [(s-prog l headers block) (compile-prog l headers block)]
 
-    [else (error (format "Missed a case in compile: ~a" ast-node))]))
+    [else (error (format "Missed a case in compile-resugared: ~a" ast-node))]))
 
 (define (compile-header header)
   (match header
+    [(s-import l (? symbol? file) name)
+     (let [[file (path->string
+                  (path->complete-path
+                   (build-path FFI
+                    (string-append (symbol->string file) ".rkt"))))]]
+     (compile-header (s-import l file name)))]
     [(s-import l file name)
      (attach l
        (with-syntax

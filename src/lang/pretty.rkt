@@ -94,13 +94,18 @@
      (pretty (s-block s stmts))]
     
     [(s-block _ stmts)
-          (apply newlines (append (list "block:")
+     (apply newlines (append (list "block:")
                              (map indented (map prettier stmts))
                              (list "end")))]
     
-    [(s-user-block _ stmts)
+    [(s-user-block _ (s-block _ stmts))
      (apply newlines (append (list "block:")
                              (map indented (map prettier stmts))
+                             (list "end")))]
+    
+    [(s-user-block _ x)
+     (apply newlines (append (list "block:")
+                             (list (indented (pretty x)))
                              (list "end")))]
     
     [(s-let _ bnd val)
@@ -189,6 +194,26 @@
     
     [(s-data-field _ name value)
      (format "~a : ~a" (pretty name) (pretty value))]
+    
+    [(s-cases _ a e bs)
+     (newlines
+      (format "cases(~a) ~a:" (pretty-ann a) (pretty e))
+      (apply newlines (map indented (map pretty bs)))
+      "end")]
+
+    [(s-cases-else _ a e bs else)
+     (newlines
+      (format "cases(~a) ~a:" (pretty-ann a) (pretty e))
+      (apply newlines (map indented (map pretty bs)))
+      (indented (format "| else => ~a" (pretty-implicit-block else)))
+      "end")]
+
+    
+    [(s-cases-branch _ c bs e)
+     (format "| ~a(~a) => ~a"
+             (pretty c)
+             (comma-sep (map pretty bs))
+             (pretty-implicit-block e))]
     
     ; TODO: method-field
     

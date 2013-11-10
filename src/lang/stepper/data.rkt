@@ -52,6 +52,7 @@
 (define-setting HIDE_UNDEFINED      set-hide-undefined!      #t)
 (define-setting DEBUG_COMMUNICATION set-debug-communication! #f)
 (define-setting DEBUG_DESUGAR       set-debug-desugar!       #f)
+(define-setting SILENCE             set-silence!             #f)
 
 (define expand (make-parameter #f))
 (define unexpand (make-parameter #f))
