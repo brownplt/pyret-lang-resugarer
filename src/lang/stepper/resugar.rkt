@@ -8,10 +8,10 @@
 ; debugging:
 (require "../desugar.rkt")
 
-(set-debug-desugar! #f)
+(set-debug-desugar! #t)
 (set-debug-communication! #f)
 (set-debug-steps! #f)
-(set-silence! #f)
+(set-silence! #t)
 
 (provide (rename-out
           [with-resugaring resugarer:with-resugaring]

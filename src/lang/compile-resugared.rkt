@@ -18,13 +18,15 @@
 
 ;;; Keeping track of the stack ;;;
 
-(define (compile-stepping-prelude ast stx)
-  #`(resugarer:with-resugaring
-     (r:let []
-       (r:define $emit (r:lambda (z)
-         (resugarer:emit z)))
-       (resugarer:emit-first #,(adorn ast))
-       #,stx)))
+(define (compile-stepping-prelude ast imports-stx body-stx)
+  #`(r:begin
+      #,@imports-stx
+      (resugarer:with-resugaring
+       (r:let []
+         (r:define $emit (r:lambda (z)
+           (resugarer:emit z)))
+         (resugarer:emit-first #,(adorn ast))
+         #,body-stx))))
 
 ;;; Stepper ;;;
 
@@ -384,7 +386,9 @@
     [(s-colon-bracket l obj field)
      (compile-lookup l obj field #'p:get-raw-field s-colon-bracket)]
 
-    [(s-prog l headers block) (compile-prog l headers block)]
+    ; This case doesn't belong here; it is not an expression.
+    ; Hopefully it wasn't used anywhere...
+    ;[(s-prog l headers block) (compile-prog l headers block)]
 
     [else (error (format "Missed a case in compile-resugared: ~a" ast-node))]))
 
@@ -415,12 +419,15 @@
 
 
 (define (compile-prog l headers block)
-  (attach l
-   (with-syntax ([(req ...) (map compile-header (filter s-import? headers))]
-                 [(prov ...) (map compile-header (filter s-provide? headers))])
-     (ephemeral-frame #`(s-prog #,l (r:list #,@(map adorn headers)) __)
-        #`(r:begin req ... #,(compile-pyret block) prov ...)))))
-
+  (values
+   (map compile-header (filter s-import? headers))
+   (attach l
+     (ephemeral-frame
+      #`(s-prog #,l (r:list #,@(map adorn headers)) __)
+      #`(r:begin
+         #,(compile-pyret block)
+         #,@(map compile-header (filter s-provide? headers)))))))
+  
 (define (maybe-lift-constants ast) ast)
 ;  (cond
 ;    [(current-compile-lift-constants) (lift-constants ast)]
@@ -429,8 +436,11 @@
 (define (compile-pyret ast)
   (match ast
     [(s-prog l headers block)
+     (let-values [[[imports-stx body-stx]
+                   (compile-prog l headers block)]]
      (compile-stepping-prelude (s-prog l headers block)
-                               (compile-prog l headers block))]
+                               imports-stx
+                               body-stx))]
     [(s-block l stmts)
      (match-define (s-block l2 new-stmts) (maybe-lift-constants ast))
      (with-syntax ([(stmt ...) (compile-block l2 new-stmts (compile-env (set) #t))])

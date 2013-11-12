@@ -11,5 +11,7 @@ end
 fun discard(x):
 end
 
-discard(build-some-lists(1000))
-"ok"
+for p.time():
+  discard(build-some-lists(2000))
+end
+"done"
