@@ -1,0 +1,22 @@
+
+To run the benchmarks, run benchmark-list.arr and benchmark-fact.arr (or make
+your own) after setting '(set-silence! #t) in
+src/lang/stepper/resugar.rkt.
+
+My native results (all in cpu time ms):
+
+benchmark-fact.arr:
+  --no-checks  ==>  192, 196, 192 (avg. 193)
+    (cpu - gc)      82, 88, 92    (avg. 87)
+  --trace      ==>  272, 276, 272 (avg. 273)
+    (cpu - gc)      204, 188, 192 (avg. 195)
+  ratio: 141%
+        (224% cpu - gc)
+
+benchmark-list.arr:
+  --no-checks  ==>  2400, 2460, 2340  (avg. 2400)
+    (cpu - gc)      1512, 1528, 1364  (avg. 1468)
+  --trace      ==>  2588, 2420, 2528  (avg. 2512)
+    (cpu - gc)      1592, 1548, 1488  (avg. 1542)
+  ratio: 105%
+        (105% cpu - gc)
