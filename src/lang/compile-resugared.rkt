@@ -216,6 +216,7 @@
         #`(r:cons #,(compile-string-literal l name env)
                   #,(compile-expr/internal value env)))]))
 
+
 (define (compile-string-literal l e env)
   (match e
     [(s-str _ s) (d->stx s l)]
@@ -271,6 +272,31 @@
                            fun-stx)]]
                #,(compile-args add-frame return-result
                                args args-stx env))))
+  
+  (define (compile-members add-frame return-result l fields env)
+    ; add-frame :: string-map stx -> frame
+    ; return-result :: string-map -> stx<runtime-value>
+    (define exprs
+      (map s-data-field-value fields))
+    (define (insert-field-val field field-val)
+      (match field
+        [(s-data-field l name _)
+         #`(s-data-field #,l #,name #,field-val)]))
+    (define (make-string-map-entry field val)
+      (match field
+        [(s-data-field l name _)
+         #`(r:cons #,(compile-string-literal l name env)
+                   #,val)]))
+    (define (add-frame* field-vals body)
+      (add-frame #`(r:list #,@(map insert-field-val fields field-vals))
+                 body))
+    (define (return-result* field-vals)
+      (return-result
+       #`(r:list #,@(map make-string-map-entry fields field-vals))))
+    (define fields-stx
+      (map (curryr compile-expr/internal env) exprs))
+    (compile-args add-frame* return-result*
+                  exprs fields-stx env))
 
   
   (match ast-node
@@ -361,29 +387,11 @@
          (compile-app l compiled-fun compiled-args args env)))]
 
     [(s-obj l fields)
-     (define exprs
-       (map s-data-field-value fields))
-     (define (insert-field-val field field-val)
-       (match field
-         [(s-data-field l name _)
-          #`(s-data-field #,l #,name #,field-val)]))
-     (define (make-string-map-entry field val)
-       (match field
-         [(s-data-field l name _)
-          #`(r:cons #,(compile-string-literal l name env)
-                    #,val)]))
-     (define (add-frame field-vals body)
-       (frame
-        #`(s-obj #,l (r:list #,@(map insert-field-val fields field-vals)))
-        body))
-     (define (return-result field-vals)
-       #`(p:mk-object
-          (p:make-string-map
-           (r:list #,@(map make-string-map-entry fields field-vals)))))
-     (define fields-stx
-       (map (curryr compile-expr/internal env) exprs))
-     (attach l (compile-args add-frame return-result
-                             exprs fields-stx env))]
+     (define (add-frame string-map body)
+       (frame #`(s-obj #,l #,string-map) body))
+     (define (return-result string-map)
+       #`(p:mk-object (p:make-string-map #,string-map)))
+     (attach l (compile-members add-frame return-result l fields env))]
 
     [(s-extend l super fields)
      (attach l

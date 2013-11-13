@@ -49,7 +49,7 @@ core
     # Statements #
 
 	Block : S * [Expr] -> Expr;
-    Check : S * [Expr] -> Expr;
+    Check : S * Expr -> Expr;
 
 	Fun : S * String * [String] * [Bind] * Ann * String * Expr * Expr -> Expr;
 	Var : S * Bind * Expr -> Expr;
@@ -130,8 +130,7 @@ surface
 
     # Temporaries #
 
-    BuildLocation : S -> Expr;
-    LookupOp : S * String -> Expr;
+#    BuildLocation : S -> Expr;
 #    ReplaceTyparams : [String] * Ann -> Ann;
 #    FlattenBlocks : [Block] -> Block;
 
@@ -152,6 +151,7 @@ surface
     # Statements #
 
 	Block : S * [Expr] -> Expr;
+    Check : S * Expr -> Expr;
 
 	Fun : S * String * [String] * [Bind] * Ann * String * Expr * Expr -> Expr;
 	Var : S * Bind * Expr -> Expr;
@@ -208,16 +208,6 @@ surface
 rules
 
 
-  (* src might be serialized differently *)
-  BuildLocation(S(src, line, col, pos, span)) ->
-    App(S(src, line, col, pos, span),
-     Bracket(S(src, line, col, pos, span),
-       Id(S(src, line, col, pos, span), "error"),
-         Str(S(src, line, col, pos, span), "location")),
-     [Str(S(src, line, col, pos, span), src),
-      IntNum(S(src, line, col, pos, span), line),
-      IntNum(S(src, line, col, pos, span), col)]);
-
   (* ImportSymbol: performs string-manipulation *)
   (* ProvideAll: non-compositional; traverses program body *)
   (* Block: flattens blocks together *)
@@ -270,25 +260,6 @@ rules
     App(s, iter, [Lam(s, [], [bs ...], ann, "", body, Block(s, [])),
                   es ...]);
   
-  (* Uses pretty *)
-  Op(s, "is", x, y) ->
-    App(s, Bracket(s, Id(s, "checkers"), Str(s, "check-is")),
-      [Str(s, "--is-check--"),
-       Lam(s, [], [], ABlank, "", x, Block(s, [])),
-       Lam(s, [], [], ABlank, "", y, Block(s, [])),
-       BuildLocation(s)]);
-
-  (* Uses pretty *)
-  Op(s, "raises", x, y) ->
-    App(s, Bracket(s, Id(s, "checkers"), Str(s, "check-raises")),
-      [Str(s, "--raises-check--"),
-       Lam(s, [], [], ABlank, "", x, Block(s, [])),
-       y,
-       BuildLocation(s)]);
-
-  LookupOp(s, "+") -> Str(s, "_plus");
-  LookupOp(s, "*") -> Str(s, "_times");
-
   (* No support for '_' syntax *)
   Not(s, e) -> App(s, Bracket(s, e, Str(s, "_not")), []);
   Op(s, "==", x, y) ->
@@ -389,3 +360,32 @@ rules
 
   Dot(s, val, field) -> Bracket(s, val, Str(s, field));
   Colon(s, obj, field) -> ColonBracket(s, obj, Str(s, field));
+
+
+### Check mode not supported. ###
+
+  # (* Uses pretty *)
+  # Op(s, "is", x, y) ->
+  #   App(s, Bracket(s, Id(s, "checkers"), Str(s, "check-is")),
+  #     [Str(s, "--is-check--"),
+  #      Lam(s, [], [], ABlank, "", x, Block(s, [])),
+  #      Lam(s, [], [], ABlank, "", y, Block(s, [])),
+  #      BuildLocation(s)]);
+
+  # (* Uses pretty *)
+  # Op(s, "raises", x, y) ->
+  #   App(s, Bracket(s, Id(s, "checkers"), Str(s, "check-raises")),
+  #     [Str(s, "--raises-check--"),
+  #      Lam(s, [], [], ABlank, "", x, Block(s, [])),
+  #      y,
+  #      BuildLocation(s)]);
+
+  (* src might be serialized differently *)
+  # BuildLocation(S(src, line, col, pos, span)) ->
+  #   App(S(src, line, col, pos, span),
+  #    Bracket(S(src, line, col, pos, span),
+  #      Id(S(src, line, col, pos, span), "error"),
+  #        Str(S(src, line, col, pos, span), "location")),
+  #    [Str(S(src, line, col, pos, span), src),
+  #     IntNum(S(src, line, col, pos, span), line),
+  #     IntNum(S(src, line, col, pos, span), col)]);

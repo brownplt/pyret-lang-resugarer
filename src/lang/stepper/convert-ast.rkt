@@ -95,7 +95,7 @@
     [(s-provide-all s)   (node 'ProvideAll s)]
     ; Statements
     [(s-block s ss)      (node 'Block s (recs ss))]
-    [(s-check s ss)      (node 'Check s (recs ss))]
+    [(s-check s x)       (node 'Check s (rec x))]
     [(s-fun s n ns bs a str check body)
      (node 'Fun s (show-name n) (List (map show-name ns)) (recs bs)
                   (rec a) str (rec check) (rec body))]
@@ -201,7 +201,7 @@
     [(Node 'ProvideAll (list s))  (s-provide-all (syn s))]
     ; Statements
     [(Node 'Block (list s ss))     (s-block (syn s) (recs ss))]
-    [(Node 'Check (list s ss))     (s-check (syn s) (recs ss))]
+    [(Node 'Check (list s x))      (s-check (syn s) (rec x))]
     [(Node 'Fun (list s n ns bs a str check body))
      (s-fun (syn s) (read-name n) (read-names ns)
             (recs bs) (rec a) str (rec check) (rec body))]
