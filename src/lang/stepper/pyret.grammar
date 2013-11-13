@@ -131,8 +131,8 @@ surface
     # Temporaries #
 
     BuildLocation : S -> Expr;
+    LookupOp : S * String -> Expr;
 #    ReplaceTyparams : [String] * Ann -> Ann;
-#    LookupOp : String -> OpName;
 #    FlattenBlocks : [Block] -> Block;
 
 
@@ -286,6 +286,9 @@ rules
        y,
        BuildLocation(s)]);
 
+  LookupOp(s, "+") -> Str(s, "_plus");
+  LookupOp(s, "*") -> Str(s, "_times");
+
   (* No support for '_' syntax *)
   Not(s, e) -> App(s, Bracket(s, e, Str(s, "_not")), []);
   Op(s, "==", x, y) ->
@@ -298,28 +301,81 @@ rules
   Op(s, "and", x, y) ->
     App(s, Bracket(s, x, Str(s, "_and")),
            [Lam(s, [], [], ABlank, "", y, Block(s, []))]);
-  Op(s, "+", x, y)  -> App(s, Bracket(s, x, Str(s, "_plus")), [y]);
-  Op(s, "*", x, y)  -> App(s, Bracket(s, x, Str(s, "_times")), [y]);
-  # Op(s, "+", x, y) ->
-  #   Block(s, [Let(s, Bind(s, "temp", ABlank),
-  #                 Obj(s, [DataField(s, Str(s, "left"), x),
-  #                         DataField(s, Str(s, "right"), y)])),
-  #             App(s, Bracket(s, Bracket(s, Id(s, "temp"), Str(s, "left")),
-  #                               Str(s, "_plus")),
-  #                    [Bracket(s, Id(s, "temp"), Str(s, "right"))])]);
-  # Op(s, "*", x, y) ->
-  #   Block(s, [Let(s, Bind(s, "temp", ABlank),
-  #                 Obj(s, [DataField(s, Str(s, "left"), x),
-  #                         DataField(s, Str(s, "right"), y)])),
-  #             App(s, Bracket(s, Bracket(s, Id(s, "temp"), Str(s, "left")),
-  #                               Str(s, "_times")),
-  #                    [Bracket(s, Id(s, "temp"), Str(s, "right"))])]);
-  Op(s, "-", x, y)  -> App(s, Bracket(s, x, Str(s, "_minus")), [y]);
-  Op(s, "/", x, y)  -> App(s, Bracket(s, x, Str(s, "_divide")), [y]);
-  Op(s, "<=", x, y) -> App(s, Bracket(s, x, Str(s, "_lessequal")), [y]);
-  Op(s, "<", x, y)  -> App(s, Bracket(s, x, Str(s, "_lessthan")), [y]);
-  Op(s, ">=", x, y) -> App(s, Bracket(s, x, Str(s, "_greaterequal")), [y]);
-  Op(s, ">", x, y)  -> App(s, Bracket(s, x, Str(s, "_greaterthan")), [y]);
+
+  # Standard binops:
+  # Op(s, "+", x, y)  -> App(s, Bracket(s, x, Str(s, "_plus")), [y]);
+
+  Op(s, "+", x, y) ->
+    Block(s, [Let(s, Bind(s, temp, ABlank),
+                  Obj(s, [DataField(s, Str(s, "left"), x),
+                          DataField(s, Str(s, "right"), y)])),
+              App(s, Bracket(s, Bracket(s, Id(s, temp), Str(s, "left")),
+                                Str(s, "_plus")),
+                     [Bracket(s, Id(s, temp), Str(s, "right"))])])
+  fresh temp;
+
+  Op(s, "*", x, y) ->
+    Block(s, [Let(s, Bind(s, temp, ABlank),
+                  Obj(s, [DataField(s, Str(s, "left"), x),
+                          DataField(s, Str(s, "right"), y)])),
+              App(s, Bracket(s, Bracket(s, Id(s, temp), Str(s, "left")),
+                                Str(s, "_times")),
+                     [Bracket(s, Id(s, temp), Str(s, "right"))])])
+  fresh temp;
+
+  Op(s, "-", x, y) ->
+    Block(s, [Let(s, Bind(s, temp, ABlank),
+                  Obj(s, [DataField(s, Str(s, "left"), x),
+                          DataField(s, Str(s, "right"), y)])),
+              App(s, Bracket(s, Bracket(s, Id(s, temp), Str(s, "left")),
+                                Str(s, "_minus")),
+                     [Bracket(s, Id(s, temp), Str(s, "right"))])])
+  fresh temp;
+
+  Op(s, "/", x, y) ->
+    Block(s, [Let(s, Bind(s, temp, ABlank),
+                  Obj(s, [DataField(s, Str(s, "left"), x),
+                          DataField(s, Str(s, "right"), y)])),
+              App(s, Bracket(s, Bracket(s, Id(s, temp), Str(s, "left")),
+                                Str(s, "_divide")),
+                     [Bracket(s, Id(s, temp), Str(s, "right"))])])
+  fresh temp;
+
+  Op(s, "<=", x, y) ->
+    Block(s, [Let(s, Bind(s, temp, ABlank),
+                  Obj(s, [DataField(s, Str(s, "left"), x),
+                          DataField(s, Str(s, "right"), y)])),
+              App(s, Bracket(s, Bracket(s, Id(s, temp), Str(s, "left")),
+                                Str(s, "_lessequal")),
+                     [Bracket(s, Id(s, temp), Str(s, "right"))])])
+  fresh temp;
+
+  Op(s, ">=", x, y) ->
+    Block(s, [Let(s, Bind(s, temp, ABlank),
+                  Obj(s, [DataField(s, Str(s, "left"), x),
+                          DataField(s, Str(s, "right"), y)])),
+              App(s, Bracket(s, Bracket(s, Id(s, temp), Str(s, "left")),
+                                Str(s, "_greaterequal")),
+                     [Bracket(s, Id(s, temp), Str(s, "right"))])])
+  fresh temp;
+
+  Op(s, "<", x, y) ->
+    Block(s, [Let(s, Bind(s, temp, ABlank),
+                  Obj(s, [DataField(s, Str(s, "left"), x),
+                          DataField(s, Str(s, "right"), y)])),
+              App(s, Bracket(s, Bracket(s, Id(s, temp), Str(s, "left")),
+                                Str(s, "_lessthan")),
+                     [Bracket(s, Id(s, temp), Str(s, "right"))])])
+  fresh temp;
+
+  Op(s, ">", x, y) ->
+    Block(s, [Let(s, Bind(s, temp, ABlank),
+                  Obj(s, [DataField(s, Str(s, "left"), x),
+                          DataField(s, Str(s, "right"), y)])),
+              App(s, Bracket(s, Bracket(s, Id(s, temp), Str(s, "left")),
+                                Str(s, "_greaterthan")),
+                     [Bracket(s, Id(s, temp), Str(s, "right"))])])
+  fresh temp;
 
   Paren(s, x) -> x;
 

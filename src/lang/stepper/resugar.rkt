@@ -11,7 +11,7 @@
 (set-debug-desugar! #t)
 (set-debug-communication! #f)
 (set-debug-steps! #f)
-(set-silence! #t)
+(set-silence! #f)
 
 (provide (rename-out
           [with-resugaring resugarer:with-resugaring]

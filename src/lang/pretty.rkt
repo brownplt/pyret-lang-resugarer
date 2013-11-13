@@ -265,7 +265,7 @@
         [(p-str? val)
          (format "'~a'" (p-str-s val))]
         [(p-base? val) (to-repr val)]
-        [(procedure? val) "proc"]
+        [(procedure? val) "func"]
         [else "unprintable-expr"]))
 
 (define (pretty-ann ann)

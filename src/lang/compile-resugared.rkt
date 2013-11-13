@@ -213,8 +213,9 @@
   (match ast-node
     [(s-data-field l name value)
      (attach l
-       #`(r:cons #,(compile-string-literal l name env)
-                 #,(compile-expr/internal value env)))]))
+        #`(r:cons #,(compile-string-literal l name env)
+                  #,(compile-expr/internal value env)))]))
+
 (define (compile-string-literal l e env)
   (match e
     [(s-str _ s) (d->stx s l)]
@@ -240,23 +241,27 @@
                             #,(frame #`(#,bracket-constr #,l temp __)
                                      (compile-string-literal l field env)))))))
 
-  (define (compile-args add-frame return-result
-                        used-vars unused-vars unused-args unused-args-stx env)
-    (if (empty? unused-args)
-        (return-result used-vars)
-        #`(r:let [[#,(car unused-vars)
-                   #,(add-frame (append used-vars (list '__) (map adorn (cdr unused-args)))
-                                (car unused-args-stx))]]
-                 #,(compile-args add-frame return-result
-                                 (append used-vars (list (car unused-vars)))
-                                 (cdr unused-vars)
-                                 (cdr unused-args)
-                                 (cdr unused-args-stx)
-                                 env))))
+  (define (compile-args add-frame return-result args args-stx env)
+    (define (compile-args-rec
+             used-vars unused-vars
+             unused-args unused-args-stx)
+      (if (empty? unused-args)
+          (return-result used-vars)
+          #`(r:let [[#,(car unused-vars)
+                     #,(add-frame (append used-vars
+                                          (list '__)
+                                          (map adorn (cdr unused-args)))
+                                  (car unused-args-stx))]]
+                   #,(compile-args-rec
+                      (append used-vars (list (car unused-vars)))
+                      (cdr unused-vars)
+                      (cdr unused-args)
+                      (cdr unused-args-stx)))))
+    (compile-args-rec (list) (map (lambda (_) (gensym 'arg)) args)
+                      args args-stx))
   
-  (define (compile-app l fun-stx hidden-args args-stx args env)
-    (let [[vars (map (lambda (_) (gensym 'arg)) args)]
-          [fvar (gensym 'fun)]]
+  (define (compile-app l fun-stx args-stx args env)
+    (let [[fvar (gensym 'fun)]]
       (define (add-frame args body)
         (frame #`(s-app #,l #,fvar (r:list #,@args)) body))
       (define (return-result args)
@@ -265,7 +270,7 @@
                            #`(s-app #,l __ (r:list #,@(map adorn args)))
                            fun-stx)]]
                #,(compile-args add-frame return-result
-                               hidden-args vars args args-stx env))))
+                               args args-stx env))))
 
   
   (match ast-node
@@ -353,12 +358,32 @@
        (map (lambda (arg) (compile-expr/internal arg env)) args))
      (mark-if (current-mark-mode) l
        (attach l
-         (compile-app l compiled-fun (list) compiled-args args env)))]
+         (compile-app l compiled-fun compiled-args args env)))]
 
     [(s-obj l fields)
-     (attach l
-       (with-syntax ([(member ...) (map (curryr compile-member env) fields)])
-         #'(p:mk-object (p:make-string-map (r:list member ...)))))]
+     (define exprs
+       (map s-data-field-value fields))
+     (define (insert-field-val field field-val)
+       (match field
+         [(s-data-field l name _)
+          #`(s-data-field #,l #,name #,field-val)]))
+     (define (make-string-map-entry field val)
+       (match field
+         [(s-data-field l name _)
+          #`(r:cons #,(compile-string-literal l name env)
+                    #,val)]))
+     (define (add-frame field-vals body)
+       (frame
+        #`(s-obj #,l (r:list #,@(map insert-field-val fields field-vals)))
+        body))
+     (define (return-result field-vals)
+       #`(p:mk-object
+          (p:make-string-map
+           (r:list #,@(map make-string-map-entry fields field-vals)))))
+     (define fields-stx
+       (map (curryr compile-expr/internal env) exprs))
+     (attach l (compile-args add-frame return-result
+                             exprs fields-stx env))]
 
     [(s-extend l super fields)
      (attach l
@@ -417,7 +442,7 @@
             (r:provide (r:rename-out [temp-stx %PYRET-PROVIDE])))))]))
 
 
-
+; Returns two values: a list of compiled imports, and a compiled body.
 (define (compile-prog l headers block)
   (values
    (map compile-header (filter s-import? headers))
@@ -429,9 +454,6 @@
          #,@(map compile-header (filter s-provide? headers)))))))
   
 (define (maybe-lift-constants ast) ast)
-;  (cond
-;    [(current-compile-lift-constants) (lift-constants ast)]
-;    [else ast]))
 
 (define (compile-pyret ast)
   (match ast
