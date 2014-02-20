@@ -70,6 +70,18 @@
     (if (s-block? block)
         (apply newlines-prefixed (map prettier (s-block-stmts block)))
         (prettier block)))
+
+  (define (pretty-subexp x)
+    ;;; When 'x' is a stmt, wrap it in parens for clarity.
+    (define (is-stmt? x)
+      (match x
+        [(? Val? x)     (is-stmt? (Val-value x))]
+        [(? Var? x)     (is-stmt? (Var-value x))]
+        [(? Func? x)    (is-stmt? (Func-term x))]
+        [(? s-stmt? x)  #t]
+        [(? s-cases? x) #t]
+        [_              #f]))
+    (if (is-stmt? x) (format "(~a)" (pretty x)) (pretty x)))
   
   (match ast
     
@@ -218,14 +230,14 @@
     ; TODO: method-field
     
     [(s-app _ fun args)
-     (format "~a(~a)" (pretty fun) (comma-sep (map pretty args)))]
+     (format "~a(~a)" (pretty-subexp fun) (comma-sep (map pretty args)))]
     
     [(s-left-app _ obj fun args)
-     (concat (pretty obj) "^" (pretty fun) (parens (comma-sep (map pretty args))))]
+     (concat (pretty obj) "^" (pretty-subexp fun) (parens (comma-sep (map pretty args))))]
     
     [(s-extend _ super fields)
      (format "~a.{ ~a }"
-             (pretty super)
+             (pretty-subexp super)
              (comma-sep (map pretty fields)))]
     
     [(s-obj _ fields)
@@ -233,22 +245,22 @@
              (comma-sep (map pretty fields)))]
     
     [(s-op _ op e1 e2)
-     (format "~a ~a ~a" (pretty e1) (substring (symbol->string op) 2) (pretty e2))]
+     (format "~a ~a ~a" (pretty-subexp e1) (substring (symbol->string op) 2) (pretty-subexp e2))]
     
     [(s-not _ e)
-     (format "not ~a" (pretty e))]
+     (format "not ~a" (pretty-subexp e))]
     
     [(s-dot _ val field)
-     (format "~a.~a" (pretty val) field)] 
+     (format "~a.~a" (pretty-subexp val) field)] 
     
     [(s-bracket _ val field)
-     (format "~a.[~a]" (pretty val) (pretty field))]
+     (format "~a.[~a]" (pretty-subexp val) (pretty field))]
     
     [(s-colon _ obj field)
-     (format "~a:~a" (pretty obj) field)]
+     (format "~a:~a" (pretty-subexp obj) field)]
     
     [(s-colon-bracket _ obj field)
-     (format "~a:[~a]" (pretty obj) (pretty field))]
+     (format "~a:[~a]" (pretty-subexp obj) (pretty field))]
 
     [(s-num _ n) (number->string n)]
     [(s-bool _ #t) "true"]
