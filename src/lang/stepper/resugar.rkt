@@ -11,7 +11,7 @@
 (set-debug-desugar! #t)
 (set-debug-communication! #f)
 (set-debug-steps! #f)
-(set-silence! #t)
+(set-silence! #f)
 
 (provide (rename-out
           [with-resugaring resugarer:with-resugaring]
@@ -56,6 +56,10 @@
 
 (define-runtime-path cmd-file "Resugarer")
 (define-runtime-path grammar-file "pyret.grammar")
+(when (not (or (file-exists? cmd-file) (link-exists? cmd-file)))
+  (error "Resugarer: Could not find resugarer executable at " cmd-file))
+(when (not (or (file-exists? grammar-file) (link-exists? grammar-file)))
+  (error "Resugarer: Could not find grammar file at " grammar-file))
 (define-syntax-rule (with-resugaring expr exprs ...)
   (begin
     (current-locale "en_US.UTF-8") ; How to make Racket read in unicode?
