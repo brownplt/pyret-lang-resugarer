@@ -120,12 +120,12 @@
   (string->symbol (format "~a##inline" id)))
 
 (define (compile-block l stmts env)
-  (define (compile-stmt ast-node env add-frame)
+  (define (compile-stmt ast-node env add-frame add-ephemeral-frame)
     (match ast-node
       [(s-var s bind val)
         (list
           #`(r:define #,(discard-_ (s-bind-id bind))
-                      #,(add-frame (frame #`(s-var #,s #,bind __)
+                      #,(add-ephemeral-frame (frame #`(s-var #,s #,bind __)
                                           (compile-expr/internal val env))))
           #`p:nothing)]
       [(s-let s bind val)
@@ -141,7 +141,7 @@
        (define id-used (or (> (length (remove-duplicates ids)) 1)
                            (= (length ids) 1)))
        (define (add-let-frame stx)
-         (add-frame (frame #`(s-let #,s #,bind __) stx)))
+         (add-ephemeral-frame (frame #`(s-let #,s #,bind __) stx)))
        
        (match val
         [(s-lam l _ args _ doc body _)
@@ -191,12 +191,13 @@
   (define (compile-stmts stmts env)
     (cond [(empty? stmts) (list)]
           [(empty? (cdr stmts))
-           (compile-stmt (car stmts) env (λ (x) x))]
+           (compile-stmt (car stmts) env (λ (x) x) (λ (x) x))]
           [else
            (let* [[fr #`(s-block
                          #,l (r:list __ #,@(map adorn (cdr stmts))))]
-                  [add-frame (λ (stx) (frame fr stx))]]
-             (append (compile-stmt (car stmts) env add-frame)
+                  [add-frame (λ (stx) (frame fr stx))]
+                  [add-ephemeral-frame (λ (stx) (ephemeral-frame fr stx))]]
+             (append (compile-stmt (car stmts) env add-frame add-ephemeral-frame)
                      (compile-stmts (cdr stmts) env)))]))
   (define ids (block-ids stmts))
   (define fun-ids (block-fun-ids stmts))
