@@ -228,7 +228,7 @@ rules
   If(s, branches) ->
     IfElse(s, branches, Block(s,
       [App(s, Id(s, "raise"),
-	    [Str(s, "if: no tests matchedq")])]));
+	    [Str(s, "if: no tests matched")])]));
 
   Try(s, try, Bind(s2, v, ann), catch) ->
     CoreTry(s, try, Bind(s2, exn_id, ann),
