@@ -26,8 +26,7 @@ First, make sure you have a recentish version of Haskell
 installed. (Ideally, install the Haskell platform --
 http://www.haskell.org/platform/, or apt-get install haskell-platform.)
 
-Make sure the lib/Resugarer submodule is up to date. Run `make` in
-lib/Resugarer/confection. 
+Run `make` in lib/Resugarer/confection. 
 
 Now you should be ready to run resugaring. Just use the '--trace' option:
 
@@ -39,7 +38,7 @@ you just made at lib/Resugarer/confection/Confection)
 
 Before the Pyret program is run, it will print the output of Pyret's
 standard resugaring ('--std-->') and its desugaring as performed by the
-Resugarer system ('--new-->'). These ought to be identical!
+Resugarer system ('--new-->'). These ought to be semantically equivalent!
 
 As it runs, each evaluation step will be printed as a Pyret AST. Terms in
 the AST that have been reduced to values are surrounded by angle brackets

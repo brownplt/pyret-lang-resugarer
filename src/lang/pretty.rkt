@@ -269,6 +269,8 @@
     [(s-id _ id) (symbol->string id)]
 
     [(s-paren _ e) (format "(~a)" (pretty e))]
+
+    [(s-import _ _ _) ""]
     
     [else (pretty-val ast)]))
 
