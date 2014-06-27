@@ -108,6 +108,7 @@
 
 (define check-mode #t)
 (define resugar-mode #f)
+(define resugar-core-mode #f)
 (define mark-mode #f)
 (command-line
   #:once-each
@@ -117,7 +118,9 @@
   ("--no-checks" "Run without checks"
    (set! check-mode #f))
   ("--trace" "Show evaluation steps via resugaring"
-   (set! resugar-mode #t))
+   (set! resugar-mode "surface"))
+  ("--trace-core" "Show evaluation steps via resugaring. Also show skipped core steps."
+   (set! resugar-mode "core"))
   ("--show-marks" "Mark all call frames"
    (set! mark-mode #t))
   ("--no-marks" "Do not mark call frames"
@@ -136,7 +139,7 @@
       (cond
         [resugar-mode
          (parameterize ([current-mark-mode mark-mode]
-                        [current-resugar-mode #t]
+                        [current-resugar-mode resugar-mode]
                         [current-compile-lift-constants #f]
                         [current-allow-shadowed-vars #t])
            (dynamic-require pyret-file #f))]

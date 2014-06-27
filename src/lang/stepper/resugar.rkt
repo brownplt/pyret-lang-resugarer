@@ -4,6 +4,7 @@
 (require "convert-ast.rkt")
 (require "../ast.rkt")
 (require "../pretty.rkt")
+(require "../../parameters.rkt")
 (require racket/runtime-path)
 ; debugging:
 (require "../desugar.rkt")
@@ -82,6 +83,8 @@
           result)))))
 
 (define (desugar dir sort ast)
+  (when (string=? "core" (current-resugar-mode))
+    (set-debug-steps! #t))
   (with-resugaring dir ((expand) ast sort)))
 
 (define (reconstruct-stack x)

@@ -10,3 +10,6 @@
 [submodule "lib/Resugarer"]
 	path = lib/Resugarer
 	url = https://github.com/brownplt/Resugarer.git
+[submodule "Resugarer"]
+	path = Resugarer
+	url = https://github.com/brownplt/Resugarer.git
