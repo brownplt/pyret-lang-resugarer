@@ -8,6 +8,7 @@
          | Alien: Marks code that is not from here. |#
 (struct MacHead (m c q) #:transparent)
 (struct MacBody () #:transparent)
+(struct MacTranspBody () #:transparent)
 (struct Alien () #:transparent)
   
 #| ATerm ::= Node(Symbol, listof(ATerm))

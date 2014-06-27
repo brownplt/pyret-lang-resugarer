@@ -263,6 +263,7 @@
                                                (number->string c)
                                                (aterm->string q)))))]
       [(MacBody) "Body"]
+      [(MacTranspBody) "!Body"]
       [(Alien)   "Alien"]))
   (define (show-origins os)
     (braces (brackets (comma-sep (map show-origin os)))))
@@ -295,12 +296,14 @@
       [`(number ,x)        (string->number x)]
       [(? string? x)       (strip-quotes x)]
       [`(tag "Body")       (MacBody)]
+      [`(tag "!" "Body")   (MacTranspBody)]
       [`(tag "Alien")      (Alien)]
       [`(tag "Head" ,_ ,l ,_ ,i ,_ ,t ,_)
        (MacHead (string->symbol l) (string->number i) (ragg->aterm t))]
       [`(tags . ,xs)       (map ragg->aterm (extract-list xs))]
       [`(terms . ,xs)      (map ragg->aterm (extract-list xs))]
       [`(list ,_ ,xs ,_)   (List (ragg->aterm xs))]
+      [`(node ,_ ,l ,_ ,x ,_) (Node (string->symbol l) (ragg->aterm x))]
       [`(node ,l ,_ ,x ,_) (Node (string->symbol l) (ragg->aterm x))]
       [`(term ,x)          (ragg->aterm x)]
       [`(term ,x ,o)       (Tagged (ragg->aterm o) (ragg->aterm x))]))
@@ -334,6 +337,9 @@
       (token lexeme lexeme)]
      ;; brackets
      [(union "[" "]" "{" "}" "(" ")" ",")
+      (token lexeme lexeme)]
+     ;; bang
+     ["!"
       (token lexeme lexeme)]
      ;; whitespace
      [whitespace
