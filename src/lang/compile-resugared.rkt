@@ -45,6 +45,22 @@
       (r:let [[result (r:let [] #,expr)]]
              result)))
 
+(define (post-step-frame fr expr)
+  #`(r:let [[result (r:let [] #,expr)]]
+      (r:with-continuation-mark
+       (r:quote resugar-mark)
+       (r:lambda (__) #,fr)
+        ($emit result))
+      result))
+
+(define (pre-step-frame stx expr)
+  #`(r:begin
+     (r:with-continuation-mark
+       (r:quote resugar-mark)
+       (r:lambda (__) #,stx)
+         ($emit "gremlin"))
+     #,expr))
+
 ; Call external code
 (define (annot/extern-call func_ args_)
   (error "annot/extern-call NYI"))
@@ -67,9 +83,6 @@
         [(list? x)
          (with-syntax [[(xs* ...) (map adorn x)]]
            #'(r:list xs* ...))]
-;        [(s-id? x)
-;         (with-syntax [[v* (s-id-id x)]]
-;           #'(s:Var (r:quote v*) (r:quote v*)))] ; TODO(justin)
         [(srcloc? x)
          (match (reify-srcloc x)
            [(list src line col pos span)
@@ -188,6 +201,10 @@
                     #,(add-let-frame (compile-expr/internal val env)))
                  #`nothing)])]
       [_ (list (add-frame (compile-expr/internal ast-node env)))]))
+  (define (add-step-to-stmt stxs stmt stmts)
+    (reverse (cons (post-step-frame #`(s-block #,l (r:list #,@(map adorn stmts)))
+                               (car (reverse stxs)))
+                   (cdr (reverse stxs)))))
   (define (compile-stmts stmts env)
     (cond [(empty? stmts) (list)]
           [(empty? (cdr stmts))
@@ -197,7 +214,9 @@
                          #,l (r:list __ #,@(map adorn (cdr stmts))))]
                   [add-frame (λ (stx) (frame fr stx))]
                   [add-ephemeral-frame (λ (stx) (ephemeral-frame fr stx))]]
-             (append (compile-stmt (car stmts) env add-frame add-ephemeral-frame)
+             (append (add-step-to-stmt (compile-stmt (car stmts) env add-frame add-ephemeral-frame)
+                                       (car stmts)
+                                       (cdr stmts))
                      (compile-stmts (cdr stmts) env)))]))
   (define ids (block-ids stmts))
   (define fun-ids (block-fun-ids stmts))
@@ -268,7 +287,7 @@
         (frame #`(s-app #,l #,fvar (r:list #,@args)) body))
       (define (return-result args)
         #`(#,fvar #,@args))
-      #`(r:let [[#,fvar #,(ephemeral-frame
+      #`(r:let [[#,fvar #,(frame
                            #`(s-app #,l __ (r:list #,@(map adorn args)))
                            fun-stx)]]
                #,(compile-args add-frame return-result
@@ -321,7 +340,8 @@
      (attach l
        (with-syntax ([(arg ...) (args-stx l args)]
                      [body-stx (compile-body l body new-env)])
-         #`(p:pλ (arg ...) #,doc body-stx)))]
+         #`(p:pλ (arg ...) #,doc ;body-stx)))]
+                 #,(pre-step-frame (adorn body) #`body-stx))))]
 
     [(s-method l args ann doc body _)
      (define new-env (compile-env (compile-env-functions-to-inline env) #f))
@@ -377,9 +397,6 @@
        (match fun
          [(s-id l2 (? (λ (s) (set-member? (compile-env-functions-to-inline env) s)) id))
           (make-immediate-id id)]
-         [(s-lam l _ args _ doc body _)
-          (with-syntax ([(arg ...) (args-stx l args)])
-            #`(p:arity-catcher (arg ...) #,(compile-expr/internal body env)))]
          [_ #`(p:p-base-app #,(compile-expr fun env))]))
      (define compiled-args
        (map (lambda (arg) (compile-expr/internal arg env)) args))
